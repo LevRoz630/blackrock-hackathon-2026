@@ -142,33 +142,16 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  declineBtn: {
-    flex: 1,
+  dismissBtn: {
     paddingVertical: 16,
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  approveBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: colors.brand,
-  },
-  declineText: {
+  dismissText: {
     fontFamily: font.semi,
     fontSize: 16,
     color: colors.text,
-  },
-  approveText: {
-    fontFamily: font.semi,
-    fontSize: 16,
-    color: '#050506',
   },
 });

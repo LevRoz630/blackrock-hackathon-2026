@@ -56,6 +56,60 @@ Merchant locations in St Andrews colour-coded by block rate. Pulsing red dots fo
 | TrueLayer | Read-only bank data powering consequence lines ("£140 left until loan payment") |
 | Firebase (FCM) | Push notifications triggering full-screen prompts when app is backgrounded |
 
+## Data-driven automation
+
+The user gives permission once. The app makes better real-time decisions than they can — because it has data they don't have in their head at the point of purchase.
+
+### Auto-calculated safe-to-spend
+
+Users don't set budgets manually. The app computes them from real financial data via TrueLayer Open Banking:
+
+```
+safe_to_spend = available_balance
+              - upcoming standing orders (exact dates + amounts)
+              - predicted direct debits (from last month's pattern)
+              - safety buffer
+```
+
+Standing orders provide `next_payment_date` and `next_payment_amount`. Direct debits are predicted from `previous_payment_date` and `previous_payment_amount`. The budget updates in real time as obligations are paid or new ones appear.
+
+### MCC-aware friction
+
+Not all spending is equal. Marqeta webhooks include `card_acceptor.mcc` (merchant category code). The system applies different friction levels per category — no friction on groceries (MCC 5411), maximum friction on bars (5813), gambling (7995), and impulse shopping categories. No user configuration needed.
+
+| MCC | Category | Friction |
+|---|---|---|
+| 5411 | Grocery stores | None |
+| 5542 | Petrol stations | None |
+| 5812 | Restaurants | Low |
+| 5813 | Bars, taverns | High |
+| 5921 | Liquor stores | High |
+| 7995 | Gambling | Maximum |
+| 5691 | Clothing stores | Medium |
+| 5732 | Electronics stores | Medium |
+
+### Location-aware auto-activation
+
+Expo Location provides real-time coordinates. Google Places Nearby Search (50m radius) identifies the place type — `bar`, `night_club`, `shopping_mall`, `casino`. When the user walks into a nightlife zone on a Friday night, High Risk mode auto-activates with a computed budget. No user action required.
+
+### Stacked risk scoring
+
+Individual signals are weak. Stacked together, the app knows a decision is bad before the user does. The risk score scales with the number of concurrent signals:
+
+- **Velocity** — 3rd transaction in 45 minutes at bars (Marqeta rolling data)
+- **Time** — it's 1am
+- **Location** — user is in a nightlife zone (Google Places)
+- **Balance** — 60% of safe-to-spend already gone (TrueLayer)
+- **Obligations** — rent direct debit hits in 4 days (TrueLayer standing orders)
+
+### Real obligation consequence lines
+
+The block prompt pulls the user's actual next obligation from their bank data:
+
+> "£18 bar tab. Your £95 student loan payment is in 3 days. You'd have £12 left."
+
+Standing orders provide exact upcoming payments with references ("RENT", "LOAN"). Direct debits provide payee names ("STUDENT LOANS COMPANY", "BRITISH GAS"). This is information the user genuinely doesn't have in their head at 1am.
+
 ## Research backing
 
 - Dismiss/continue friction is the most effective intervention (d = 0.74, Gruning et al., PNAS 2023)
