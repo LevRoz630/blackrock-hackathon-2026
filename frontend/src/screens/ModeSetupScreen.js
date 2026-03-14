@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { getSettings, updateSettings } from '../api/client';
+import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
 
@@ -53,185 +54,177 @@ export default function ModeSetupScreen({ navigation }) {
     try {
       await updateSettings(USER_ID, payload);
       navigation.goBack();
-    } catch (e) {
-      Alert.alert('Error', 'Failed to save settings');
+    } catch {
+      navigation.goBack();
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Configure Modes</Text>
+    <SafeAreaView style={s.safe}>
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={16}>
+          <Text style={s.back}>{'\u2190'} Back</Text>
+        </TouchableOpacity>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Block Mode</Text>
+        <Text style={s.title}>Settings</Text>
+
+        <View style={s.section}>
+          <View style={s.sectionHead}>
+            <Text style={s.sectionName}>Block mode</Text>
             <Switch
               value={blockEnabled}
               onValueChange={setBlockEnabled}
-              trackColor={{ true: '#4ade80' }}
+              trackColor={{ false: colors.divider, true: colors.brand }}
+              thumbColor="#fff"
             />
           </View>
-          <Text style={styles.sectionDesc}>
-            Auto-decline individual purchases above a threshold. 40-second timer before you can approve.
+          <Text style={s.desc}>
+            Blocks purchases above a threshold. You get 40 seconds to reconsider before you can approve.
           </Text>
           {blockEnabled && (
-            <View style={styles.inputRow}>
-              <Text style={styles.inputLabel}>Threshold ({'\u00A3'})</Text>
-              <TextInput
-                style={styles.input}
-                value={blockThreshold}
-                onChangeText={setBlockThreshold}
-                keyboardType="numeric"
-                placeholder="50"
-                placeholderTextColor="#666"
-              />
-            </View>
+            <Row label="Threshold" prefix="\u00A3" value={blockThreshold} onChange={setBlockThreshold} />
           )}
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>High Risk Environment</Text>
+        <View style={s.section}>
+          <View style={s.sectionHead}>
+            <Text style={s.sectionName}>High risk environment</Text>
             <Switch
               value={hrEnabled}
               onValueChange={setHrEnabled}
-              trackColor={{ true: '#4ade80' }}
+              trackColor={{ false: colors.divider, true: colors.brand }}
+              thumbColor="#fff"
             />
           </View>
-          <Text style={styles.sectionDesc}>
-            Set a spending budget for a time window. Transactions exceeding the budget are auto-declined.
+          <Text style={s.desc}>
+            Sets a spending budget for a time window. Anything over budget gets auto-declined.
           </Text>
           {hrEnabled && (
             <>
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Budget ({'\u00A3'})</Text>
-                <TextInput
-                  style={styles.input}
-                  value={hrBudget}
-                  onChangeText={setHrBudget}
-                  keyboardType="numeric"
-                  placeholder="60"
-                  placeholderTextColor="#666"
-                />
-              </View>
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Window (minutes)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={hrWindowMinutes}
-                  onChangeText={setHrWindowMinutes}
-                  keyboardType="numeric"
-                  placeholder="240"
-                  placeholderTextColor="#666"
-                />
-              </View>
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Unit label (optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={hrUnitLabel}
-                  onChangeText={setHrUnitLabel}
-                  placeholder="e.g. drinks"
-                  placeholderTextColor="#666"
-                />
-              </View>
+              <Row label="Budget" prefix="\u00A3" value={hrBudget} onChange={setHrBudget} />
+              <Row label="Window" suffix="min" value={hrWindowMinutes} onChange={setHrWindowMinutes} />
+              <Row label="Unit label" value={hrUnitLabel} onChange={setHrUnitLabel} placeholder="e.g. drinks" text />
               {hrUnitLabel !== '' && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Cost per unit ({'\u00A3'})</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={hrUnitCost}
-                    onChangeText={setHrUnitCost}
-                    keyboardType="numeric"
-                    placeholder="6"
-                    placeholderTextColor="#666"
-                  />
-                </View>
+                <Row label="Cost per unit" prefix="\u00A3" value={hrUnitCost} onChange={setHrUnitCost} />
               )}
             </>
           )}
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save</Text>
+        <TouchableOpacity style={s.saveBtn} onPress={handleSave} activeOpacity={0.7}>
+          <Text style={s.saveBtnText}>Save</Text>
         </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
-  scroll: {
-    padding: 20,
+function Row({ label, prefix, suffix, value, onChange, placeholder, text }) {
+  return (
+    <View style={s.row}>
+      <Text style={s.rowLabel}>{label}</Text>
+      <View style={s.rowInput}>
+        {prefix && <Text style={s.rowFix}>{prefix}</Text>}
+        <TextInput
+          style={s.input}
+          value={value}
+          onChangeText={onChange}
+          keyboardType={text ? 'default' : 'numeric'}
+          placeholder={placeholder}
+          placeholderTextColor={colors.muted}
+        />
+        {suffix && <Text style={s.rowFix}>{suffix}</Text>}
+      </View>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 24 },
+
+  back: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.brand,
+    marginTop: 16,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 24,
+    fontFamily: font.bold,
+    fontSize: 28,
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginTop: 24,
+    marginBottom: 36,
   },
+
   section: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#333',
+    marginBottom: 32,
   },
-  sectionHeader: {
+  sectionHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+  sectionName: {
+    fontFamily: font.semi,
+    fontSize: 17,
+    color: colors.text,
   },
-  sectionDesc: {
-    color: '#888',
-    fontSize: 13,
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  inputLabel: {
-    color: '#ccc',
+  desc: {
+    fontFamily: font.regular,
     fontSize: 14,
+    color: colors.muted,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  rowLabel: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.sub,
     flex: 1,
   },
-  input: {
-    backgroundColor: '#0a0a0a',
-    borderRadius: 8,
-    padding: 10,
-    color: '#fff',
-    fontSize: 16,
-    width: 120,
-    textAlign: 'right',
-    borderWidth: 1,
-    borderColor: '#333',
+  rowInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  saveButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    padding: 16,
+  rowFix: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.muted,
+  },
+  input: {
+    fontFamily: font.semi,
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'right',
+    minWidth: 60,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+
+  saveBtn: {
+    backgroundColor: colors.brand,
+    borderRadius: 10,
+    paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
   },
-  saveButtonText: {
-    color: '#fff',
+  saveBtnText: {
+    fontFamily: font.semi,
     fontSize: 16,
-    fontWeight: '600',
+    color: '#050506',
   },
 });

@@ -49,6 +49,26 @@ async def init_db() -> None:
             total_spent REAL NOT NULL DEFAULT 0.0,
             PRIMARY KEY (user_id, window_id)
         );
+
+        CREATE TABLE IF NOT EXISTS transaction_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            transaction_token TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            amount REAL NOT NULL,
+            merchant_name TEXT NOT NULL DEFAULT '',
+            merchant_category TEXT NOT NULL DEFAULT '',
+            mode_triggered TEXT,
+            was_blocked INTEGER NOT NULL DEFAULT 0,
+            user_decision TEXT,
+            decision_latency_ms INTEGER,
+            window_total_at_time REAL,
+            risk_score INTEGER,
+            is_outlier INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_events_user_ts
+            ON transaction_events (user_id, timestamp);
     """)
     await _db.commit()
 

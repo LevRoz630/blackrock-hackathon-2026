@@ -4,17 +4,18 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   SafeAreaView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getSettings } from '../api/client';
+import { getSettings, getDemoTransactions } from '../api/client';
+import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
 
 export default function HomeScreen({ navigation }) {
   const [settings, setSettings] = useState(null);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions] = useState(getDemoTransactions());
 
   useFocusEffect(
     useCallback(() => {
@@ -24,180 +25,268 @@ export default function HomeScreen({ navigation }) {
     }, [])
   );
 
-  const blockActive = settings?.block_enabled;
-  const hrActive = settings?.high_risk_enabled;
+  const blockOn = settings?.block_enabled;
+  const hrOn = settings?.high_risk_enabled;
+  const remaining = settings?.high_risk_remaining ?? settings?.high_risk_budget;
+  const budget = settings?.high_risk_budget;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Think Before You Spend</Text>
+    <SafeAreaView style={s.safe}>
+      <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
 
-      <View style={styles.modesRow}>
-        <View style={[styles.modeBadge, blockActive && styles.modeBadgeActive]}>
-          <Text style={styles.modeBadgeText}>
-            Block {blockActive ? 'ON' : 'OFF'}
-          </Text>
-          {blockActive && settings?.block_threshold != null && (
-            <Text style={styles.modeDetail}>
-              Threshold: {'\u00A3'}{settings.block_threshold}
-            </Text>
-          )}
-        </View>
+        <Text style={s.brand}>SpendZen</Text>
 
-        <View style={[styles.modeBadge, hrActive && styles.modeBadgeActive]}>
-          <Text style={styles.modeBadgeText}>
-            High Risk {hrActive ? 'ON' : 'OFF'}
-          </Text>
-          {hrActive && settings?.high_risk_budget != null && (
-            <Text style={styles.modeDetail}>
-              Budget: {'\u00A3'}{settings.high_risk_budget}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {hrActive && settings?.high_risk_budget != null && (
-        <View style={styles.budgetCard}>
-          <Text style={styles.budgetLabel}>Remaining Budget</Text>
-          <Text style={styles.budgetAmount}>
-            {'\u00A3'}{settings.high_risk_remaining ?? settings.high_risk_budget}
-          </Text>
-          {settings.high_risk_unit_label && (
-            <Text style={styles.budgetUnit}>
-              ~{Math.floor((settings.high_risk_remaining ?? settings.high_risk_budget) / (settings.high_risk_unit_cost || 1))}{' '}
-              {settings.high_risk_unit_label} left
-            </Text>
-          )}
-        </View>
-      )}
-
-      <Text style={styles.sectionTitle}>Recent Transactions</Text>
-      {transactions.length === 0 ? (
-        <Text style={styles.emptyText}>No transactions yet</Text>
-      ) : (
-        <FlatList
-          data={transactions}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.txRow}>
-              <Text style={styles.txMerchant}>{item.merchant}</Text>
-              <Text style={styles.txAmount}>{'\u00A3'}{item.amount}</Text>
+        {hrOn && budget != null ? (
+          <View style={s.hero}>
+            <Text style={s.heroLabel}>left to spend</Text>
+            <Text style={s.heroAmount}>{'\u00A3'}{remaining}</Text>
+            <View style={s.bar}>
+              <View style={[s.barFill, { width: `${Math.min(100, (remaining / budget) * 100)}%` }]} />
             </View>
-          )}
-        />
-      )}
+            <View style={s.heroMeta}>
+              <Text style={s.heroSub}>{'\u00A3'}{budget} budget</Text>
+              {settings.high_risk_unit_label ? (
+                <Text style={s.heroSub}>
+                  {Math.floor(remaining / (settings.high_risk_unit_cost || 1))} {settings.high_risk_unit_label} left
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : (
+          <View style={s.hero}>
+            <Text style={s.heroLabel}>all clear</Text>
+            <Text style={[s.heroAmount, { fontSize: 32 }]}>No active budget</Text>
+          </View>
+        )}
 
-      <TouchableOpacity
-        style={styles.settingsButton}
-        onPress={() => navigation.navigate('ModeSetup')}
-      >
-        <Text style={styles.settingsButtonText}>Configure Modes</Text>
-      </TouchableOpacity>
+        <View style={s.modes}>
+          <TouchableOpacity
+            style={s.modeRow}
+            onPress={() => navigation.navigate('ModeSetup')}
+            activeOpacity={0.6}
+          >
+            <View style={[s.dot, blockOn && s.dotOn]} />
+            <Text style={s.modeText}>
+              Block mode {blockOn ? `\u00B7 \u00A3${settings?.block_threshold} limit` : '\u00B7 off'}
+            </Text>
+            <Text style={s.arrow}>{'\u203A'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.modeRow}
+            onPress={() => navigation.navigate('ModeSetup')}
+            activeOpacity={0.6}
+          >
+            <View style={[s.dot, hrOn && s.dotOn]} />
+            <Text style={s.modeText}>
+              High risk {hrOn ? `\u00B7 \u00A3${budget} window` : '\u00B7 off'}
+            </Text>
+            <Text style={s.arrow}>{'\u203A'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={s.listLabel}>Transactions</Text>
+        {transactions.map((tx) => (
+          <View key={tx.id} style={s.tx}>
+            <View style={s.txLeft}>
+              <Text style={s.txName}>{tx.merchant}</Text>
+              <Text style={s.txTime}>{tx.time}</Text>
+            </View>
+            <Text style={s.txAmount}>-{'\u00A3'}{tx.amount.toFixed(2)}</Text>
+          </View>
+        ))}
+
+        <View style={s.demoSection}>
+          <Text style={s.demoLabel}>Demo</Text>
+          <View style={s.demoRow}>
+            <TouchableOpacity
+              style={s.demoBtn}
+              onPress={() =>
+                navigation.navigate('BlockPrompt', {
+                  transaction: {
+                    id: 'demo-block',
+                    merchant: 'Apple Store',
+                    amount: 999.00,
+                    context_line: '\u00A3140 left until loan payment on Mar 28',
+                  },
+                })
+              }
+            >
+              <Text style={[s.demoBtnText, { color: colors.red }]}>Block</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.demoBtn}
+              onPress={() =>
+                navigation.navigate('HighRiskOverlay', {
+                  remaining: remaining || 42,
+                  budget: budget || 60,
+                  unitLabel: settings?.high_risk_unit_label || 'drinks',
+                  unitCost: settings?.high_risk_unit_cost || 6,
+                })
+              }
+            >
+              <Text style={[s.demoBtnText, { color: colors.brand }]}>Under</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.demoBtn}
+              onPress={() =>
+                navigation.navigate('HighRiskPrompt', {
+                  transaction: { id: 'demo-hr', merchant: 'Wetherspoons', amount: 24.00 },
+                  runningTotal: 78,
+                  budget: budget || 60,
+                })
+              }
+            >
+              <Text style={[s.demoBtnText, { color: colors.red }]}>Over</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-    padding: 20,
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 24 },
+
+  brand: {
+    fontFamily: font.bold,
+    fontSize: 20,
+    color: colors.text,
+    marginTop: 20,
+    marginBottom: 40,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 20,
-    textAlign: 'center',
+
+  hero: { marginBottom: 44 },
+  heroLabel: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.sub,
+    marginBottom: 6,
   },
-  modesRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+  heroAmount: {
+    fontFamily: font.bold,
+    fontSize: 56,
+    color: colors.text,
+    letterSpacing: -2,
+    marginBottom: 16,
   },
-  modeBadge: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#333',
+  bar: {
+    height: 4,
+    backgroundColor: colors.divider,
+    borderRadius: 2,
   },
-  modeBadgeActive: {
-    borderColor: '#4ade80',
-    backgroundColor: '#0d1f0d',
+  barFill: {
+    height: 4,
+    backgroundColor: colors.brand,
+    borderRadius: 2,
   },
-  modeBadgeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modeDetail: {
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  budgetCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  budgetLabel: {
-    color: '#aaa',
-    fontSize: 13,
-  },
-  budgetAmount: {
-    color: '#4ade80',
-    fontSize: 36,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  budgetUnit: {
-    color: '#aaa',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 14,
-    textAlign: 'center',
-    marginVertical: 20,
-  },
-  txRow: {
+  heroMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    marginTop: 10,
   },
-  txMerchant: {
-    color: '#fff',
-    fontSize: 14,
+  heroSub: {
+    fontFamily: font.regular,
+    fontSize: 13,
+    color: colors.muted,
+  },
+
+  modes: {
+    marginBottom: 40,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.muted,
+    marginRight: 12,
+  },
+  dotOn: {
+    backgroundColor: colors.brand,
+  },
+  modeText: {
+    fontFamily: font.regular,
+    fontSize: 15,
+    color: colors.sub,
+    flex: 1,
+  },
+  arrow: {
+    fontFamily: font.regular,
+    fontSize: 20,
+    color: colors.muted,
+  },
+
+  listLabel: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.muted,
+    marginBottom: 8,
+  },
+  tx: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  },
+  txLeft: { flex: 1 },
+  txName: {
+    fontFamily: font.medium,
+    fontSize: 15,
+    color: colors.text,
+  },
+  txTime: {
+    fontFamily: font.regular,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
   },
   txAmount: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: font.semi,
+    fontSize: 15,
+    color: colors.sub,
   },
-  settingsButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 'auto',
+
+  demoSection: {
+    marginTop: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    paddingTop: 16,
+  },
+  demoLabel: {
+    fontFamily: font.regular,
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 12,
+  },
+  demoRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  demoBtn: {
+    flex: 1,
+    paddingVertical: 10,
     alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.divider,
+    borderRadius: 6,
   },
-  settingsButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  demoBtnText: {
+    fontFamily: font.medium,
+    fontSize: 13,
   },
 });

@@ -24,6 +24,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "fce090de-f2a8-4e45-bb46-b56958419c31"
+      }
+    },
+    "owner": "lrozanov"
   }
 }

@@ -8,8 +8,10 @@ from app.models.schemas import (
     WebhookResponse,
 )
 from app.services.bypass import check_bypass, create_bypass
+from app.services.events import log_transaction_event, record_decision
 from app.services.friction import evaluate_transaction
 from app.services.marqeta import MarqetaClient
+from app.services.ml import assess_transaction
 
 router = APIRouter()
 marqeta = MarqetaClient()
@@ -91,6 +93,34 @@ async def marqeta_webhook(payload: TransactionWebhook) -> WebhookResponse:
         new_total = total_spent + payload.amount
         await _update_window_total(payload.user_token, window_id, new_total)
 
+    risk = await assess_transaction(
+        user_id=payload.user_token,
+        amount=payload.amount,
+        merchant_name=payload.merchant_name,
+        merchant_category=payload.merchant_category,
+    )
+    webhook_response.risk_score = risk.risk_score
+    webhook_response.risk_flags = risk.flags
+
+    mode_triggered = None
+    if not webhook_response.approved:
+        mode_triggered = prompt.mode.value
+    elif prompt.show_prompt:
+        mode_triggered = prompt.mode.value
+
+    await log_transaction_event(
+        user_id=payload.user_token,
+        transaction_token=payload.token,
+        amount=payload.amount,
+        merchant_name=payload.merchant_name,
+        merchant_category=payload.merchant_category,
+        mode_triggered=mode_triggered,
+        was_blocked=not webhook_response.approved,
+        window_total_at_time=prompt.total_spent,
+        risk_score=risk.risk_score,
+        is_outlier=risk.is_outlier,
+    )
+
     if prompt.show_prompt:
         pass  # TODO: send FCM push to user's device
 
@@ -99,6 +129,13 @@ async def marqeta_webhook(payload: TransactionWebhook) -> WebhookResponse:
 
 @router.post("/transactions/decide", response_model=TransactionResult)
 async def decide_transaction(decision: UserDecision) -> TransactionResult:
+    await record_decision(
+        transaction_token=decision.transaction_token,
+        user_id=decision.user_token,
+        decision="approved" if decision.approved else "declined",
+        latency_ms=decision.decision_latency_ms,
+    )
+
     if decision.approved:
         bypass = await create_bypass(
             decision.user_token, decision.amount, decision.merchant_name

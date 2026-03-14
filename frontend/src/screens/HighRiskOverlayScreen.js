@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { colors, font } from '../theme';
 
 const AUTO_DISMISS_MS = 3000;
 
@@ -7,69 +9,58 @@ export default function HighRiskOverlayScreen({ route, navigation }) {
   const { remaining, budget, unitLabel, unitCost } = route.params;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.goBack();
-    }, AUTO_DISMISS_MS);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => navigation.goBack(), AUTO_DISMISS_MS);
+    return () => clearTimeout(t);
   }, [navigation]);
 
-  const unitsLeft =
-    unitLabel && unitCost ? Math.floor(remaining / unitCost) : null;
+  const unitsLeft = unitLabel && unitCost ? Math.floor(remaining / unitCost) : null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.label}>Remaining Budget</Text>
-        <Text style={styles.amount}>
-          {'\u00A3'}{remaining.toFixed(2)}
-        </Text>
-        <Text style={styles.ofBudget}>
-          of {'\u00A3'}{budget.toFixed(2)}
+    <BlurView intensity={40} tint="dark" style={s.backdrop}>
+      <View style={s.card}>
+        <Text style={s.amount}>{'\u00A3'}{remaining.toFixed(2)}</Text>
+        <Text style={s.sub}>
+          of {'\u00A3'}{budget.toFixed(2)} remaining
         </Text>
         {unitsLeft != null && (
-          <Text style={styles.unitText}>
-            ~{unitsLeft} {unitLabel} left
+          <Text style={s.units}>
+            {unitsLeft} {unitLabel} left
           </Text>
         )}
       </View>
-    </SafeAreaView>
+    </BlurView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const s = StyleSheet.create({
+  backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
-    backgroundColor: '#1a1a1a',
+  card: {
+    backgroundColor: colors.card,
     borderRadius: 16,
-    padding: 32,
+    paddingVertical: 40,
+    paddingHorizontal: 48,
     alignItems: 'center',
-    marginHorizontal: 40,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  label: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 8,
   },
   amount: {
-    color: '#4ade80',
-    fontSize: 48,
-    fontWeight: '700',
+    fontFamily: font.bold,
+    fontSize: 52,
+    color: colors.brand,
+    letterSpacing: -2,
   },
-  ofBudget: {
-    color: '#666',
+  sub: {
+    fontFamily: font.regular,
     fontSize: 14,
-    marginTop: 4,
+    color: colors.muted,
+    marginTop: 8,
   },
-  unitText: {
-    color: '#aaa',
+  units: {
+    fontFamily: font.medium,
     fontSize: 16,
-    marginTop: 12,
+    color: colors.sub,
+    marginTop: 16,
   },
 });

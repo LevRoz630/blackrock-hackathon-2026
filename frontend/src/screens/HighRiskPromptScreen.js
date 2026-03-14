@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -7,177 +7,145 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { decideTransaction } from '../api/client';
+import { colors, font } from '../theme';
+
+const USER_ID = 'demo-user';
 
 export default function HighRiskPromptScreen({ route, navigation }) {
   const { transaction, runningTotal, budget } = route.params;
-  const [deciding, setDeciding] = useState(false);
+  const promptShownAt = useRef(Date.now());
 
   const overBy = runningTotal - budget;
 
-  const handleDecision = async (approved) => {
-    setDeciding(true);
-    try {
-      await decideTransaction({
-        transaction_id: transaction.id,
-        approved,
-      });
-    } catch {
-      // silently handle
-    }
+  const handleDismiss = () => {
+    const latency = Date.now() - promptShownAt.current;
+    decideTransaction({
+      transaction_token: transaction.id,
+      user_token: USER_ID,
+      amount: transaction.amount,
+      merchant_name: transaction.merchant || '',
+      approved: false,
+      decision_latency_ms: latency,
+    }).catch(() => {});
     navigation.goBack();
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.heading}>Over Budget</Text>
-        <Text style={styles.subheading}>Transaction auto-declined</Text>
+    <SafeAreaView style={s.safe}>
+      <View style={s.top}>
+        <Text style={s.label}>Over budget</Text>
+      </View>
 
-        <View style={styles.detailCard}>
-          <Text style={styles.merchant}>
-            {transaction.merchant || 'Unknown Merchant'}
-          </Text>
-          <Text style={styles.txAmount}>
-            {'\u00A3'}{transaction.amount?.toFixed(2)}
-          </Text>
-        </View>
+      <View style={s.body}>
+        <Text style={s.amount}>{'\u00A3'}{transaction.amount?.toFixed(2)}</Text>
+        <Text style={s.merchant}>{transaction.merchant || 'Unknown'}</Text>
 
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Running Total</Text>
-            <Text style={styles.statValue}>
-              {'\u00A3'}{runningTotal.toFixed(2)}
-            </Text>
+        <View style={s.stats}>
+          <View style={s.stat}>
+            <Text style={s.statNum}>{'\u00A3'}{runningTotal.toFixed(2)}</Text>
+            <Text style={s.statLabel}>spent so far</Text>
           </View>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Over By</Text>
-            <Text style={[styles.statValue, styles.overValue]}>
-              {'\u00A3'}{overBy.toFixed(2)}
-            </Text>
+          <View style={s.divider} />
+          <View style={s.stat}>
+            <Text style={[s.statNum, { color: colors.red }]}>{'\u00A3'}{overBy.toFixed(2)}</Text>
+            <Text style={s.statLabel}>over budget</Text>
           </View>
         </View>
       </View>
 
-      <View style={styles.buttons}>
+      <View style={s.bottom}>
+        <Text style={s.hint}>This transaction was automatically blocked.</Text>
         <TouchableOpacity
-          style={styles.declineButton}
-          onPress={() => handleDecision(false)}
-          disabled={deciding}
+          style={s.dismissBtn}
+          onPress={handleDismiss}
+          activeOpacity={0.7}
         >
-          <Text style={styles.declineButtonText}>Decline</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.approveButton}
-          onPress={() => handleDecision(true)}
-          disabled={deciding}
-        >
-          <Text style={styles.approveButtonText}>Approve</Text>
+          <Text style={s.dismissText}>OK</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+
+  top: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  heading: {
-    color: '#ef4444',
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  subheading: {
-    color: '#888',
+  label: {
+    fontFamily: font.medium,
     fontSize: 14,
-    marginBottom: 32,
+    color: colors.red,
   },
-  detailCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 20,
-    width: '100%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-    marginBottom: 20,
+
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  amount: {
+    fontFamily: font.bold,
+    fontSize: 64,
+    color: colors.text,
+    letterSpacing: -2,
   },
   merchant: {
-    color: '#ccc',
-    fontSize: 16,
-    marginBottom: 8,
+    fontFamily: font.regular,
+    fontSize: 18,
+    color: colors.sub,
+    marginTop: 6,
   },
-  txAmount: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: '700',
-  },
-  statsRow: {
+
+  stats: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
+    alignItems: 'center',
+    marginTop: 40,
   },
   stat: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
+  },
+  statNum: {
+    fontFamily: font.bold,
+    fontSize: 24,
+    color: colors.text,
+    letterSpacing: -0.5,
   },
   statLabel: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 4,
+    fontFamily: font.regular,
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 2,
   },
-  statValue: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
+  divider: {
+    width: 1,
+    height: 36,
+    backgroundColor: colors.divider,
+    marginHorizontal: 20,
   },
-  overValue: {
-    color: '#ef4444',
+
+  bottom: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
-  buttons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    paddingBottom: 36,
+  hint: {
+    fontFamily: font.regular,
+    fontSize: 13,
+    color: colors.muted,
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  declineButton: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
+  dismissBtn: {
+    paddingVertical: 16,
     alignItems: 'center',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: colors.divider,
   },
-  declineButtonText: {
-    color: '#ef4444',
+  dismissText: {
+    fontFamily: font.semi,
     fontSize: 16,
-    fontWeight: '600',
-  },
-  approveButton: {
-    flex: 1,
-    backgroundColor: '#16a34a',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  approveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text,
   },
 });

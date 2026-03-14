@@ -20,6 +20,8 @@ class TransactionWebhook(BaseModel):
 class WebhookResponse(BaseModel):
     approved: bool
     reason: str
+    risk_score: int | None = None
+    risk_flags: list[str] = []
 
 
 class FrictionPrompt(BaseModel):
@@ -37,6 +39,7 @@ class UserDecision(BaseModel):
     amount: float
     merchant_name: str = ""
     approved: bool
+    decision_latency_ms: int | None = None
 
 
 class TransactionResult(BaseModel):
