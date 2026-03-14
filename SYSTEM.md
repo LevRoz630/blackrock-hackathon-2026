@@ -1,26 +1,12 @@
 # System Overview
 
-Three modes, one card. The mode determines how the app responds when a transaction hits a user's spending limit.
+Two modes, one card. The mode determines how the app responds when a transaction hits a user's spending limit.
 
 ---
 
 ## Modes
 
-### 1. Everyday — low friction, always on
-
-For normal daily spending. Lightweight nudge that keeps the user aware without getting in the way.
-
-- **When it fires:** Transaction exceeds the user's daily or category limit.
-- **What happens:** Push notification with a 10-second reflection prompt. Timer counts down, then two buttons activate: **Continue** / **Cancel**.
-- **Friction level:** Light. The purchase goes through by default if the user ignores the prompt.
-- **Prompt example:** "You've spent £32 on food today — £12 over your usual. Continue?"
-- **Escalation:** Each additional overspend in the same day adds 5 seconds to the next prompt (10s → 15s → 20s). Mirrors ScreenZen's escalating friction pattern.
-
-**Why this works:** 10 seconds is enough to cause 36% abandonment of impulsive actions (PNAS 2023). Escalation penalises repeated overspending without punishing the first one.
-
----
-
-### 2. Block — hard friction, opt-in
+### 1. Block — hard friction, opt-in
 
 For users who want real accountability. The transaction does not go through until the user actively engages.
 
@@ -34,7 +20,7 @@ For users who want real accountability. The transaction does not go through unti
 
 ---
 
-### 3. Night Out / Event — context-aware, time-boxed
+### 2. Night Out / Event — context-aware, time-boxed
 
 For high-spend periods the user knows about in advance: nights out, holidays, trips, festivals. The user sets a budget and a time window. The mode activates and deactivates automatically.
 
@@ -62,12 +48,6 @@ These apply across all three modes, grounded in the research.
 
 ## Use cases
 
-### Everyday mode
-
-> **Monday lunch.** A student's daily food limit is £15. They tap their card for a £18 meal deal + coffee. A push notification appears: "£18 on food — £3 over your daily limit. You've spent £62 on food this week." 10-second timer, then Continue / Cancel. They glance at it, decide the coffee was unnecessary, hit Cancel. Total friction: 10 seconds.
-
-> **Online shopping.** A student browses ASOS at 11pm. They add a £35 jacket to cart and pay with the virtual card. Notification: "£35 at ASOS — that's £48 on clothes this month, double your usual." 10-second timer. They think about it, hit Continue. Next purchase triggers a 15-second prompt.
-
 ### Block mode
 
 > **Saving for a trip.** A student turns on Block mode for the month to build savings. Every transaction triggers a 40-second reflection screen. Most small purchases (coffee, snacks) get declined after the pause. Essentials (groceries, transport) get approved. At the end of the month they've saved £180 more than usual. They can't turn Block off on impulse — 24-hour cooldown.
@@ -82,11 +62,11 @@ These apply across all three modes, grounded in the research.
 
 ## Mode comparison
 
-| | Everyday | Block | Night Out |
-|---|---|---|---|
-| **Default state** | Always on | Opt-in | Scheduled |
-| **Initial delay** | 10 seconds | 40 seconds | 30 seconds |
-| **Escalation** | +5s per repeat overspend/day | Fixed 40s | +15s after 3rd prompt in window |
-| **If ignored** | Transaction approved | Transaction held | Transaction held |
-| **Disable** | Toggle off instantly | 24-hour cooldown | Runs until window ends |
-| **Best for** | Daily awareness | Saving periods, high discipline | Nights out, trips, festivals |
+| | Block | Night Out |
+|---|---|---|
+| **Default state** | Opt-in | Scheduled |
+| **Initial delay** | 40 seconds | 30 seconds |
+| **Escalation** | Fixed 40s | +15s after 3rd prompt in window |
+| **If ignored** | Transaction held | Transaction held |
+| **Disable** | 24-hour cooldown | Runs until window ends |
+| **Best for** | Saving periods, high discipline | Nights out, trips, festivals |
