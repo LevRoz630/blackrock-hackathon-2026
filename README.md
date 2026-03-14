@@ -25,6 +25,18 @@ Are you sure you want to make this purchase?"
 
 ---
 
+## Customising Options 
+- **Single Purchase Limit:** 
+    The user sets the max limit per purchase (e.g 100£). If a transaction exceeds it then the app either asks for confirmation or blocks depending on the mode. 
+- **Spending Window:**
+    The user defines a time window (for example, the next 3 hours or the upcoming weekend) and a spending cap for that period. Every time they attempt a purchase during the window, the app prompts them to pause and think. The user can always see how much they’ve spent in the current window and how much budget remains. If the limit exceeded, entering **block** mode. 
+    Addition option: contextualisation 
+     During this window, the app translates the remaining spending budget into a user-defined real-world unit (such as “shots,” “rides,” or “coffees”) 
+
+
+
+
+
 ## Prompt design
 
 The 40-second duration is a hypothesis to be validated. Research on optimal friction suggests enough time to engage System 2 thinking without becoming dismissible. To be tested via interview study and a/b testing against shorter and longer windows. A ChatGPT-style conversational format may outperform a static prompt.
