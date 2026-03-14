@@ -16,7 +16,6 @@ Sources and key findings to inform the design of the reflection prompt.
 
 ## ScreenZen case study
 
-- 500,000+ monthly active users, 4.8 stars from 30,000+ reviews, donation-funded.
 - Uses **escalating friction**: delay increases with each repeated app open in the same day. First open is short (~5s), subsequent opens get progressively longer.
 - Rationale: first use might be intentional, repeated use is almost certainly impulsive.
 - Combines friction (entry gate) with session limits (usage cap) and daily open limits.
