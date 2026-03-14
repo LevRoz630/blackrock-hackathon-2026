@@ -133,3 +133,54 @@ async def get_user_insights(user_id: str) -> dict:
         ],
         "last_hour": {"count": last_hour_count, "total": last_hour_total},
     }
+
+
+async def get_savings_summary(user_id: str) -> dict:
+    db = await get_db()
+
+    saved = await db.execute_fetchall(
+        """SELECT COALESCE(SUM(amount), 0) FROM transaction_events
+           WHERE user_id = ? AND was_blocked = 1
+           AND (user_decision IS NULL OR user_decision = 'declined')""",
+        (user_id,),
+    )
+    total_saved = round(saved[0][0], 2) if saved else 0.0
+
+    saved_week = await db.execute_fetchall(
+        """SELECT COALESCE(SUM(amount), 0) FROM transaction_events
+           WHERE user_id = ? AND was_blocked = 1
+           AND (user_decision IS NULL OR user_decision = 'declined')
+           AND timestamp > datetime('now', '-7 days')""",
+        (user_id,),
+    )
+    saved_this_week = round(saved_week[0][0], 2) if saved_week else 0.0
+
+    blocks_declined = await db.execute_fetchall(
+        """SELECT COALESCE(COUNT(*), 0) FROM transaction_events
+           WHERE user_id = ? AND was_blocked = 1
+           AND (user_decision IS NULL OR user_decision = 'declined')""",
+        (user_id,),
+    )
+    impulses_stopped = blocks_declined[0][0] if blocks_declined else 0
+
+    streak_rows = await db.execute_fetchall(
+        """SELECT DATE(timestamp) as day, SUM(CASE WHEN was_blocked = 1
+           AND (user_decision IS NULL OR user_decision = 'declined') THEN 1 ELSE 0 END) as declined
+           FROM transaction_events
+           WHERE user_id = ?
+           GROUP BY day ORDER BY day DESC LIMIT 30""",
+        (user_id,),
+    )
+    streak = 0
+    for row in streak_rows:
+        if row[1] and row[1] > 0:
+            streak += 1
+        else:
+            break
+
+    return {
+        "total_saved": total_saved,
+        "saved_this_week": saved_this_week,
+        "impulses_stopped": impulses_stopped,
+        "streak_days": streak,
+    }

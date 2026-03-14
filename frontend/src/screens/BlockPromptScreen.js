@@ -23,14 +23,14 @@ function computeWaitSeconds({ amount, blocksToday, overridesLast30d }) {
 
   const velocityFactor = (blocksToday || 0) > 2 ? 0.5 : 0;
 
-  const bonus = 50 * (
+  const bonus = 10 * (
     0.4 * amountFactor +
     0.3 * overrideFactor +
     0.15 * timeFactor +
     0.15 * velocityFactor
   );
 
-  return Math.round(Math.min(Math.max(BASE_SECONDS + bonus, 40), 90));
+  return Math.round(Math.min(Math.max(BASE_SECONDS + bonus, 5), 15));
 }
 
 function buildPrompts({ transaction, budget, remaining, blocksToday, overridesLast30d }) {
@@ -67,11 +67,12 @@ export default function BlockPromptScreen({ route, navigation }) {
   const [promptIndex, setPromptIndex] = useState(0);
   const intervalRef = useRef(null);
   const promptShownAt = useRef(Date.now());
-  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const prompts = useRef(
     buildPrompts({ transaction, budget, remaining, blocksToday, overridesLast30d })
   ).current;
+
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
@@ -87,7 +88,6 @@ export default function BlockPromptScreen({ route, navigation }) {
   }, []);
 
   useEffect(() => {
-    if (prompts.length <= 1) return;
     const id = setInterval(() => {
       Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => {
         setPromptIndex((i) => (i + 1) % prompts.length);
@@ -99,6 +99,19 @@ export default function BlockPromptScreen({ route, navigation }) {
 
   const done = secondsLeft === 0;
   const progress = (totalSeconds - secondsLeft) / totalSeconds;
+
+  const handleApprove = () => {
+    const latency = Date.now() - promptShownAt.current;
+    decideTransaction({
+      transaction_token: transaction.id,
+      user_token: USER_ID,
+      amount: transaction.amount,
+      merchant_name: transaction.merchant || '',
+      approved: true,
+      decision_latency_ms: latency,
+    }).catch(() => {});
+    navigation.goBack();
+  };
 
   const handleDismiss = () => {
     const latency = Date.now() - promptShownAt.current;
@@ -144,14 +157,25 @@ export default function BlockPromptScreen({ route, navigation }) {
           <Text style={s.readyText}>Take a moment. Then decide.</Text>
         )}
 
-        <TouchableOpacity
-          style={[s.dismissBtn, !done && s.dismissBtnOff]}
-          onPress={handleDismiss}
-          disabled={!done}
-          activeOpacity={0.7}
-        >
-          <Text style={[s.dismissText, !done && s.dismissTextOff]}>OK</Text>
-        </TouchableOpacity>
+        <View style={s.btnRow}>
+          <TouchableOpacity
+            style={[s.declineBtn, !done && s.btnOff]}
+            onPress={handleDismiss}
+            disabled={!done}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.declineText, !done && s.btnTextOff]}>Decline</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.approveBtn, !done && s.btnOff]}
+            onPress={handleApprove}
+            disabled={!done}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.approveText, !done && s.btnTextOff]}>Approve</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -174,18 +198,19 @@ const s = StyleSheet.create({
   },
   lateTag: {
     fontFamily: font.medium,
-    fontSize: 11,
-    color: colors.red,
-    backgroundColor: colors.redDim,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    fontSize: 12,
+    color: colors.bg,
+    backgroundColor: colors.red,
     borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     overflow: 'hidden',
   },
 
   body: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 24,
   },
   amount: {
@@ -195,10 +220,10 @@ const s = StyleSheet.create({
     letterSpacing: -2,
   },
   merchant: {
-    fontFamily: font.regular,
+    fontFamily: font.medium,
     fontSize: 18,
     color: colors.sub,
-    marginTop: 6,
+    marginTop: 4,
   },
   prompt: {
     fontFamily: font.regular,
@@ -240,22 +265,39 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
 
-  dismissBtn: {
+  btnRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  declineBtn: {
+    flex: 1,
     paddingVertical: 16,
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  dismissBtnOff: {
+  approveBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: colors.brand,
+  },
+  btnOff: {
     opacity: 0.3,
   },
-  dismissText: {
+  declineText: {
     fontFamily: font.semi,
     fontSize: 16,
     color: colors.text,
   },
-  dismissTextOff: {
+  approveText: {
+    fontFamily: font.semi,
+    fontSize: 16,
+    color: '#050506',
+  },
+  btnTextOff: {
     color: colors.muted,
   },
 });

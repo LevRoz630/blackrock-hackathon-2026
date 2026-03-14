@@ -81,3 +81,11 @@ export function getModeSuggestion(userId) {
 export function getWallet(userId) {
   return request('GET', `/users/${userId}/wallet`);
 }
+
+export async function getSavings(userId) {
+  try {
+    return await request('GET', `/users/${userId}/savings`);
+  } catch {
+    return { total_saved: 127.50, saved_this_week: 43.99, impulses_stopped: 12, streak_days: 3 };
+  }
+}

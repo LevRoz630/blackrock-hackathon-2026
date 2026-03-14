@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.services.events import get_user_insights
+from app.services.events import get_savings_summary, get_user_insights
 from app.services.ml import (
     assess_transaction,
     compute_auto_mode,
@@ -15,6 +15,11 @@ router = APIRouter(prefix="/users", tags=["insights"])
 @router.get("/{user_id}/insights")
 async def user_insights(user_id: str) -> dict:
     return await get_user_insights(user_id)
+
+
+@router.get("/{user_id}/savings")
+async def savings(user_id: str) -> dict:
+    return await get_savings_summary(user_id)
 
 
 @router.get("/{user_id}/spending-profile")

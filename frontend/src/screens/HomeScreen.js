@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
+  Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { getSettings, getModeSuggestion, getWallet } from '../api/client';
+import { getSettings, getModeSuggestion, getWallet, getSavings } from '../api/client';
 import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
@@ -28,10 +30,35 @@ function formatDate(iso) {
   return `${day} ${months[d.getMonth()]}`;
 }
 
+function StreakBadge({ days }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (days < 1) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [days, pulseAnim]);
+
+  if (days < 1) return null;
+  const label = days === 1 ? '1 day streak' : `${days} day streak`;
+  return (
+    <Animated.View style={[s.streakBadge, { transform: [{ scale: pulseAnim }] }]}>
+      <Text style={s.streakFire}>{'\uD83D\uDD25'}</Text>
+      <Text style={s.streakText}>{label}</Text>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
   const [settings, setSettings] = useState(null);
   const [suggestion, setSuggestion] = useState(null);
   const [wallet, setWallet] = useState(null);
+  const [savings, setSavings] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,6 +71,9 @@ export default function HomeScreen({ navigation }) {
       getWallet(USER_ID)
         .then(setWallet)
         .catch(() => setWallet(null));
+      getSavings(USER_ID)
+        .then(setSavings)
+        .catch(() => setSavings(null));
     }, [])
   );
 
@@ -88,6 +118,32 @@ export default function HomeScreen({ navigation }) {
             <Text style={s.cardType}>VIRTUAL</Text>
           </View>
         </LinearGradient>
+
+        {savings && savings.total_saved > 0 && (
+          <View style={s.savingsCard}>
+            <View style={s.savingsTop}>
+              <View>
+                <Text style={s.savingsLabel}>You saved</Text>
+                <Text style={s.savingsAmount}>
+                  {'\u00A3'}{savings.saved_this_week.toFixed(2)}
+                  <Text style={s.savingsPeriod}> this week</Text>
+                </Text>
+              </View>
+              <StreakBadge days={savings.streak_days} />
+            </View>
+            <View style={s.savingsStats}>
+              <View style={s.savingsStat}>
+                <Text style={s.savingsStatNum}>{'\u00A3'}{savings.total_saved.toFixed(0)}</Text>
+                <Text style={s.savingsStatLabel}>total saved</Text>
+              </View>
+              <View style={s.savingsDivider} />
+              <View style={s.savingsStat}>
+                <Text style={s.savingsStatNum}>{savings.impulses_stopped}</Text>
+                <Text style={s.savingsStatLabel}>impulses stopped</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         <Text style={s.sectionLabel}>Linked accounts</Text>
         <ScrollView
@@ -341,6 +397,81 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: colors.sub,
     letterSpacing: 2,
+  },
+
+  savingsCard: {
+    backgroundColor: colors.brandDim,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.brand + '30',
+  },
+  savingsTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  savingsLabel: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.brand,
+  },
+  savingsAmount: {
+    fontFamily: font.bold,
+    fontSize: 28,
+    color: colors.text,
+    letterSpacing: -1,
+    marginTop: 2,
+  },
+  savingsPeriod: {
+    fontFamily: font.regular,
+    fontSize: 14,
+    color: colors.muted,
+  },
+  savingsStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  savingsStat: {
+    flex: 1,
+  },
+  savingsStatNum: {
+    fontFamily: font.semi,
+    fontSize: 18,
+    color: colors.text,
+  },
+  savingsStatLabel: {
+    fontFamily: font.regular,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  savingsDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.brand + '33',
+    marginHorizontal: 16,
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2a1800',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#ff8c0044',
+    gap: 4,
+  },
+  streakFire: {
+    fontSize: 14,
+  },
+  streakText: {
+    fontFamily: font.semi,
+    fontSize: 12,
+    color: '#ff8c00',
   },
 
   sectionLabel: {
