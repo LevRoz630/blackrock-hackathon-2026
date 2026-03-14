@@ -38,8 +38,12 @@ Are you sure you want to make this purchase?"
 
 
 ## Prompt design
+Spending window mode: ask every purchase and tell how much as already spent, contextualise the leftover money in the limit. 
+Ask Are you sure you want to make this purchase? The user has to wait 30 seconds before proceeding"
 
-The 40-second duration is a hypothesis to be validated. Research on optimal friction suggests enough time to engage System 2 thinking without becoming dismissible. To be tested via interview study and a/b testing against shorter and longer windows. A ChatGPT-style conversational format may outperform a static prompt.
+If limit exceeded: entering block mode, prompt you have exceeded the limit 
+
+If single purchase limit is set, exceeding it would trigger either think mode or block. 
 
 ---
 
@@ -107,3 +111,4 @@ Below the prompt the app shows: "This takes your total spend tonight to £45.".
 - Conversational (ChatGPT-style) vs static prompt: which converts better?
 - Does showing future cost (savings impact) or peer comparison discourage spend more effectively?
 - Should limits be self-set, ML-suggested, or both?
+
