@@ -4,7 +4,7 @@ from enum import Enum
 
 class Mode(str, Enum):
     BLOCK = "block"
-    NIGHT_OUT = "night_out"
+    HIGH_RISK = "high_risk"
 
 
 class TransactionWebhook(BaseModel):
@@ -16,8 +16,13 @@ class TransactionWebhook(BaseModel):
     merchant_category: str = ""
 
 
+class WebhookResponse(BaseModel):
+    approved: bool
+    reason: str
+
+
 class FrictionPrompt(BaseModel):
-    should_prompt: bool
+    show_prompt: bool
     mode: Mode
     delay_seconds: int
     message: str

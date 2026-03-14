@@ -17,14 +17,22 @@ Work exclusively within `backend/`.
 
 - `app/main.py` — FastAPI app with CORS and router registration
 - `app/routers/transactions.py` — webhook + decision endpoints
-- `app/services/friction.py` — core friction/prompt logic (Block vs Night Out modes)
+- `app/services/friction.py` — core friction/prompt logic (Block vs High Risk Environment modes)
 - `app/services/marqeta.py` — Marqeta sandbox API client
 - `app/models/schemas.py` — Pydantic models
 - `app/config.py` — settings via environment variables (prefix `TBYS_`)
 
+## Mode Behaviour
+
+- **Block:** Auto-decline transactions above user's threshold via Marqeta webhook. Show 40s timer prompt on device via FCM. User can Approve (whitelist + re-tap) or Decline (keep blocked).
+- **High Risk Environment:** User sets budget + time window. Under budget: transaction goes through, full-screen shows remaining budget (informational). Over budget: auto-declined via Marqeta, full-screen prompt with Approve (whitelist + re-tap) / Decline (keep blocked). No timer in either case.
+- Both modes can be active simultaneously. Block takes priority (checked first).
+- **Approve = whitelist + re-tap.** Marqeta can't un-decline. Backend temporarily whitelists the amount/merchant so the next card tap goes through.
+- **State lives on device (SQLite).** Backend is stateless — processes webhooks and sends FCM push notifications.
+
 ## Context
 
-Read `SYSTEM.md` for mode definitions (Block: 40s delay every txn; Night Out: 30s delay only over budget, 45s after 3rd prompt). Read `README.md` for the Marqeta JIT funding flow.
+Read `SYSTEM.md` for the unified mode spec. Read `README.md` for the Marqeta JIT funding flow.
 
 ## Conventions
 

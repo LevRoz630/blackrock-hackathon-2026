@@ -1,36 +1,47 @@
-# Unify SYSTEM.md and RESEARCH.md
+# Unify docs into SYSTEM.md
 
-Read SYSTEM.md and RESEARCH.md. Rewrite SYSTEM.md as the single source of truth, resolving all conflicts between the two documents.
+Read README.md and RESEARCH.md. Create SYSTEM.md as the single source of truth for product behaviour. Resolve all conflicts between documents using the decisions below. Then update backend code and frontend agent to match.
 
 ## Design decisions (locked in)
 
-1. **Two modes: Block and Night Out.** Drop "Think" — it's the same as Block.
+1. **Two modes: Block and High Risk Environment. Both can be active simultaneously.** They are independent — High Risk Environment tracks a spending window, Block catches big individual purchases. Drop "Think" as a separate mode.
 
-2. **Night Out/Travel- High spend risk — informational, but with a wait.** When the user is in a spending window and goes over budget, the transaction is held. The app shows what's remaining (e.g. "£12 left of £60 tonight") Two buttons: Approve / Decline. The user sees a running total and remaining budget. Optional: contextualise in real-world units the user defined ("~2 drinks left"). Under budget = no friction, transaction goes straight through.
+2. **High Risk Environment / Travel — spending window mode.** User sets a budget and a time window. Strict budget — no grace margin. If total exceeds budget by even £0.01, it blocks.
+   - **Under budget:** transaction goes through. Brief overlay (auto-dismisses after ~3 seconds) shows remaining budget (e.g. "£18 left of £60 tonight"). No interaction required. Optional: contextualise in real-world units ("~3 drinks left").
+   - **Over budget:** transaction is **auto-declined** via Marqeta webhook. Full-screen prompt appears with Approve (whitelist + re-tap) / Decline (keep blocked). No timer.
 
-3. **Block mode — for big individual purchases.** User sets a single-purchase threshold (e.g. £50). Any transaction above it is held with a 40-second timer and two buttons: Approve / Decline. 24-hour cooldown to disable. This is active friction — the purchase doesn't go through until the user decides.
+3. **Block mode — for big individual purchases.** User sets a single-purchase threshold (e.g. £50). Any transaction above it is auto-declined via Marqeta webhook, then a full-screen prompt appears with a 40-second timer. Approve button only available after timer completes. Two buttons: Approve (whitelist + re-tap) / Decline (keep blocked). 24-hour cooldown to disable Block mode.
 
-4. **Prompt design rules stay:**
-   - Two buttons, always.
-   - One number, one consequence.
-   - Visible timer (Block mode only).
+4. **Prompt design rules:**
+   - Two buttons when transaction is blocked. Brief auto-dismiss overlay when under budget.
+   - One number, one consequence. Running total + one concrete impact. No walls of text.
+   - Visible timer — Block mode only.
 
-5. **TrueLayer — data source only (for now).** Connect to user's real bank accounts via TrueLayer API as a read-only data source. For MVP, just get it connected and pulling balances/transaction history. This data powers the contextualisation in prompts — e.g. "£140 left until loan payment". Running totals within spending windows come from Marqeta webhooks, not TrueLayer.
+5. **Approve = whitelist + re-tap (both modes).** Marqeta can't un-decline a transaction. When user approves, the backend creates a time-limited bypass (user + amount range + merchant, expires after 5 minutes). User taps their card again and the next matching webhook auto-approves, consuming the bypass.
 
-6. **Remove:** escalating delays (no 45s after 3rd prompt), conversational/ChatGPT-style prompt idea.
+6. **Prompt delivery: Firebase Cloud Messaging (FCM).** Push notification triggers the full-screen prompt on the user's phone. Works when app is backgrounded.
+
+7. **Backend has a lightweight database (SQLite or Postgres).** Stores: user settings (block threshold, high risk environment budget/window), FCM device tokens, active bypasses (whitelist entries), and running totals per spending window. The device is where users configure settings; changes sync to the backend DB so the backend can process Marqeta webhooks within 3 seconds.
+
+8. **TrueLayer — read-only data source.** Connected to user's real bank accounts for context. Powers the "one consequence" line in prompts (e.g. "£140 left until loan payment"). If TrueLayer is not connected, fall back to just showing the transaction amount and budget numbers — no consequence line. Running totals within spending windows come from Marqeta webhooks, not TrueLayer.
+
+9. **Remove from all docs:** escalating delays, conversational/ChatGPT-style prompt idea, "Ask me on every purchase" toggle.
 
 ## Output
 
-Rewrite SYSTEM.md with the unified spec. Keep it concise — same style as current SYSTEM.md. Update the mode comparison table. Update use cases to match.
+Create SYSTEM.md with the unified spec. Keep it concise. Include a mode comparison table and updated use cases.
 
-After updating SYSTEM.md, update `backend/app/services/friction.py`, `backend/app/models/schemas.py`, and `backend/app/config.py` to match the new spec (Night Out returns info only with no delay, Block only triggers above threshold).
-
-Then update the frontend to match:
-- Update `.claude/agents/frontend.md` with the unified mode definitions.
-- Scaffold the following screens in `frontend/`:
-  - **Home/Dashboard** — current mode (Block / Night Out), active spending window if any, recent transactions
-  - **Mode setup** — pick Block or Night Out. Block: set single-purchase threshold. Night Out: set budget + time window, optional real-world unit label.
-  - **Block prompt** — 40-second countdown timer, transaction details, one contextual line (TrueLayer data), Approve/Decline buttons (disabled until timer completes)
-  - **Night Out prompt (full screen)** — over-budget alert as a full-screen takeover (not just a notification). Shows running total and remaining budget. Approve/Decline.
+After creating SYSTEM.md, update:
+- `backend/app/services/friction.py`, `backend/app/models/schemas.py`, and `backend/app/config.py` to match.
+- Add a backend database model (SQLite for MVP) for user settings, FCM tokens, bypasses, and spending window state.
+- Add a bypass service: create bypass on approve, check bypass on incoming webhook, expire after 5 minutes.
+- `.claude/agents/backend.md` and `.claude/agents/frontend.md` with the unified mode definitions.
+- `.claude/agents/tests.md` with updated test cases.
+- Scaffold frontend screens in `frontend/`:
+  - **Home/Dashboard** — active modes, spending window status, remaining budget, recent transactions
+  - **Mode setup** — configure Block threshold and/or High Risk Environment budget + time window + optional real-world unit label. Both can be enabled. Syncs to backend on save.
+  - **Block prompt (full screen)** — 40-second countdown timer, transaction details, one contextual line (TrueLayer data if connected, omit otherwise), Approve/Decline buttons (Approve disabled until timer completes)
+  - **High Risk Environment overlay (auto-dismiss ~3s)** — under budget: remaining budget, auto-dismisses, no buttons
+  - **High Risk Environment prompt (full screen)** — over budget: auto-declined, running total, how much over. Approve (whitelist + re-tap) / Decline (keep blocked). No timer.
 - Add navigation between screens (React Navigation).
-- Create an `api/` module for backend calls (`/webhooks/marqeta`, `/transactions/decide`).
+- Create an `api/` module for backend calls.

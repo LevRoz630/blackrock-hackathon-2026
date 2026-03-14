@@ -2,5 +2,3 @@ fastapi
 uvicorn[standard]
 pydantic-settings
 httpx
-pytest
-pytest-asyncio

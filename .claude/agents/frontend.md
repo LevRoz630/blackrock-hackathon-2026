@@ -11,18 +11,30 @@ Work exclusively within `frontend/`.
 - **React Native** (via Expo)
 - **JavaScript/JSX**
 - Target platform: **Android**
+- **State:** SQLite on device (mode settings, spending window, running totals, block threshold)
+- **Push notifications:** Firebase Cloud Messaging (FCM) triggers full-screen prompts
 
-## What to Build
+## Mode Behaviour
 
-- **Limit-setting screen** — user picks mode (Block / Night Out), sets budget and time window
-- **Friction prompt screen** — countdown timer, running total, two-button decision (Approve / Decline or Approve / I'm Done)
-- **Dashboard** — shows current mode status and recent transactions
+- **Block:** Transaction auto-declined by backend. FCM push triggers full-screen prompt with 40-second countdown timer. Approve button disabled until timer completes. Two buttons: Approve (whitelist + re-tap) / Decline (keep blocked).
+- **High Risk Environment:**
+  - Under budget: transaction goes through. Full-screen alert shows remaining budget (informational — no action buttons needed to proceed).
+  - Over budget: transaction auto-declined by backend. Full-screen prompt with Approve (whitelist + re-tap) / Decline (keep blocked). No timer.
+- Both modes can be active at the same time.
+
+## Screens to Build
+
+- **Home/Dashboard** — active modes, spending window status, remaining budget, recent transactions
+- **Mode setup** — configure Block threshold and/or High Risk Environment budget + time window + optional real-world unit label. Both can be enabled.
+- **Block prompt (full screen)** — 40s countdown, transaction details, one contextual line (TrueLayer data), Approve/Decline (Approve disabled until timer completes)
+- **High Risk Environment info (full screen)** — under budget: remaining budget display, informational only
+- **High Risk Environment prompt (full screen)** — over budget: auto-declined, running total, how much over. Approve (whitelist + re-tap) / Decline (keep blocked). No timer.
 
 ## Prompt Design Rules (from SYSTEM.md)
 
-1. Two buttons, always. Binary choice is the key component.
-2. One number, one consequence. Running total + one concrete impact. No walls of text.
-3. Visible timer. The delay must look intentional, not broken.
+1. Two buttons when transaction is blocked. Informational screen when under budget.
+2. One number, one consequence. No walls of text.
+3. Visible timer — Block mode only.
 
 ## Context
 

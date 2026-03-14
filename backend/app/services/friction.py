@@ -1,54 +1,69 @@
 from app.config import settings
-from app.models.schemas import FrictionPrompt, Mode, TransactionWebhook
+from app.models.schemas import FrictionPrompt, Mode, TransactionWebhook, WebhookResponse
 
 
 def evaluate_transaction(
     transaction: TransactionWebhook,
-    mode: Mode,
-    budget: float | None = None,
+    block_threshold: float | None = None,
+    high_risk_budget: float | None = None,
     total_spent: float = 0.0,
-    prompt_count: int = 0,
-) -> FrictionPrompt:
-    """Determine whether a transaction should trigger a friction prompt."""
-
-    if mode == Mode.BLOCK:
-        return FrictionPrompt(
-            should_prompt=True,
-            mode=Mode.BLOCK,
-            delay_seconds=settings.default_block_delay_seconds,
-            message=(
-                f"You're about to spend £{transaction.amount:.2f}"
-                f" at {transaction.merchant_name or 'a merchant'}."
-                " Take a moment to reflect."
+) -> tuple[WebhookResponse, FrictionPrompt]:
+    # Block: auto-decline above threshold
+    if block_threshold is not None and transaction.amount > block_threshold:
+        return (
+            WebhookResponse(approved=False, reason="block_threshold_exceeded"),
+            FrictionPrompt(
+                show_prompt=True,
+                mode=Mode.BLOCK,
+                delay_seconds=settings.block_delay_seconds,
+                message=(
+                    f"£{transaction.amount:.2f}"
+                    f" at {transaction.merchant_name or 'a merchant'}."
+                    f" Over your £{block_threshold:.2f} limit."
+                ),
             ),
         )
 
-    # Night Out mode: no friction while under budget
-    new_total = total_spent + transaction.amount
-    if budget is not None and new_total <= budget:
-        return FrictionPrompt(
-            should_prompt=False,
-            mode=Mode.NIGHT_OUT,
-            delay_seconds=0,
-            message="",
-            total_spent=new_total,
-            budget=budget,
+    # High Risk: check spending window budget
+    if high_risk_budget is not None:
+        new_total = total_spent + transaction.amount
+
+        if new_total > high_risk_budget:
+            return (
+                WebhookResponse(approved=False, reason="high_risk_over_budget"),
+                FrictionPrompt(
+                    show_prompt=True,
+                    mode=Mode.HIGH_RISK,
+                    delay_seconds=0,
+                    message=(
+                        f"£{new_total:.2f} spent tonight."
+                        f" £{abs(high_risk_budget - new_total):.2f} over budget."
+                    ),
+                    total_spent=new_total,
+                    budget=high_risk_budget,
+                ),
+            )
+
+        remaining = high_risk_budget - new_total
+        return (
+            WebhookResponse(approved=True, reason="high_risk_under_budget"),
+            FrictionPrompt(
+                show_prompt=True,
+                mode=Mode.HIGH_RISK,
+                delay_seconds=0,
+                message=f"£{remaining:.2f} left of £{high_risk_budget:.2f} tonight.",
+                total_spent=new_total,
+                budget=high_risk_budget,
+            ),
         )
 
-    # Over budget — prompt with escalating delay
-    if prompt_count >= settings.extended_delay_after_prompts:
-        delay = settings.extended_delay_seconds
-    else:
-        delay = settings.default_night_out_delay_seconds
-
-    return FrictionPrompt(
-        should_prompt=True,
-        mode=Mode.NIGHT_OUT,
-        delay_seconds=delay,
-        message=(
-            f"£{new_total:.2f} tonight."
-            f" {'£' + f'{budget - new_total:.2f}' + ' over budget.' if budget else ''}"
+    # No mode active
+    return (
+        WebhookResponse(approved=True, reason="within_limits"),
+        FrictionPrompt(
+            show_prompt=False,
+            mode=Mode.BLOCK,
+            delay_seconds=0,
+            message="",
         ),
-        total_spent=new_total,
-        budget=budget,
     )

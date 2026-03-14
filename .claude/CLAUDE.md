@@ -1,35 +1,30 @@
-# Think Before You Spend — Project Instructions
+# Think Before You Spend
 
 ## Repo Structure
 
 ```
 backend/          # FastAPI server
   app/
-    main.py       # App entry point
-    routers/      # API endpoints
+    main.py       # Entry point
+    routers/      # Endpoints
     models/       # Pydantic schemas
     services/     # Business logic (friction, marqeta)
-    config.py     # Settings
-  tests/          # pytest tests
-frontend/         # React Native (Expo) Android app
-SYSTEM.md         # Mode definitions and prompt design rules
-README.md         # Product concept and architecture
-RESEARCH.md       # Research notes
+    config.py     # Settings (env prefix TBYS_)
+frontend/         # React Native (Expo), Android
+SYSTEM.md         # Mode spec (source of truth)
+README.md         # Product concept
+RESEARCH.md       # Behavioural research
 ```
-
-## Tech Stack
-
-- **Backend:** FastAPI, pydantic-settings, httpx, pytest
-- **Frontend:** React Native (Expo), JavaScript/JSX, targeting Android
 
 ## Running
 
 - Backend: `cd backend && uvicorn app.main:app --reload`
-- Frontend: `cd frontend && npm run android` (or `npm run web` for browser preview)
-- Tests: `cd backend && pytest`
+- Frontend: `cd frontend && npm run android` (or `npm run web`)
 
-## Coding Conventions
+## Conventions
 
-- **Python:** Use `ruff` for linting/formatting. Type-annotate function signatures. Keep endpoints thin — logic in `services/`.
-- **JavaScript:** Use ESLint. Keep components small.
-- **Environment variables:** Prefix backend settings with `TBYS_` (see `app/config.py`).
+- Python: ruff, type annotations, thin endpoints, logic in services/
+- JS: ESLint, small components, API calls via api/ module
+- No unnecessary comments. Code should be self-explanatory.
+- No docstrings unless the function is genuinely non-obvious.
+- Keep TODO comments for actual unfinished work only.
