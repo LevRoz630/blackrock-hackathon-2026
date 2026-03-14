@@ -211,3 +211,4 @@ node_modules/
 dist/
 .env.local
 .env.*.local
+tbys.db
