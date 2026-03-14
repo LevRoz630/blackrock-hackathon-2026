@@ -30,7 +30,7 @@ const DEMO_STEPS = [
   },
   {
     title: 'Over budget',
-    narrative: 'You go over budget. The transaction is auto-declined. You see exactly how much you\u2019re over and choose to approve or walk away.',
+    narrative: 'You go over budget. The transaction is auto-declined \u2014 no override option. You see exactly how far over you are.',
     screen: 'HighRiskPrompt',
     params: {
       transaction: { id: 'demo-hr', merchant: 'Wetherspoons', amount: 24.00 },
@@ -39,8 +39,20 @@ const DEMO_STEPS = [
     },
   },
   {
-    title: 'Insights',
-    narrative: 'ML-powered analytics: risk heatmap, spending patterns, IsolationForest anomaly detection, and weekly budget tracking.',
+    title: 'Configure your safety net',
+    narrative: 'Customise block thresholds, budget windows, and real-world unit labels. All modes are toggle-on \u2014 the user stays in control.',
+    screen: 'ModeSetup',
+    params: {},
+  },
+  {
+    title: 'Risk heatmap',
+    narrative: 'Geospatial ML maps your spending locations by risk level. High-risk zones pulse in red. Tap any dot for merchant details and spend totals.',
+    screen: 'Dashboard',
+    params: {},
+  },
+  {
+    title: 'Anomaly detection',
+    narrative: 'IsolationForest flags outlier transactions \u2014 unusual amounts, merchants, or timing. Scroll down to see risk distribution, hourly/daily patterns, and weekly budget tracking.',
     screen: 'Dashboard',
     params: {},
   },
