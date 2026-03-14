@@ -7,16 +7,31 @@ import {
   ScrollView,
   SafeAreaView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { getSettings, getDemoTransactions, getModeSuggestion } from '../api/client';
+import { getSettings, getModeSuggestion, getWallet } from '../api/client';
 import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
 
+function formatTime(iso) {
+  const d = new Date(iso);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  const day = d.getDate();
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${day} ${months[d.getMonth()]}`;
+}
+
 export default function HomeScreen({ navigation }) {
   const [settings, setSettings] = useState(null);
-  const [transactions] = useState(getDemoTransactions());
   const [suggestion, setSuggestion] = useState(null);
+  const [wallet, setWallet] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,6 +41,9 @@ export default function HomeScreen({ navigation }) {
       getModeSuggestion(USER_ID)
         .then(setSuggestion)
         .catch(() => setSuggestion(null));
+      getWallet(USER_ID)
+        .then(setWallet)
+        .catch(() => setWallet(null));
     }, [])
   );
 
@@ -33,33 +51,83 @@ export default function HomeScreen({ navigation }) {
   const hrOn = settings?.high_risk_enabled;
   const remaining = settings?.high_risk_remaining ?? settings?.high_risk_budget;
   const budget = settings?.high_risk_budget;
+  const vc = wallet?.virtual_card;
+  const cards = wallet?.linked_cards || [];
+  const txns = wallet?.recent_transactions || [];
 
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
 
-        <Text style={s.brand}>SpendZen</Text>
+        <Text style={s.brand}>SpendPause</Text>
 
-        {hrOn && budget != null ? (
-          <View style={s.hero}>
-            <Text style={s.heroLabel}>left to spend</Text>
-            <Text style={s.heroAmount}>{'\u00A3'}{remaining}</Text>
+        <LinearGradient
+          colors={['#0f1f1a', '#131325']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.card}
+        >
+          <View style={s.cardTop}>
+            <Text style={s.cardLabel}>SpendPause</Text>
+            <View style={[s.cardBadge, vc?.status === 'active' && s.cardBadgeActive]}>
+              <Text style={[s.cardBadgeText, vc?.status === 'active' && s.cardBadgeTextActive]}>
+                {vc?.status === 'active' ? 'ACTIVE' : 'INACTIVE'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={s.cardBalance}>
+            {'\u00A3'}{vc ? vc.total_balance.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '---'}
+          </Text>
+          <Text style={s.cardBalanceSub}>Total balance across {vc?.card_count || 0} accounts</Text>
+
+          <View style={s.cardBottom}>
+            <Text style={s.cardNumber}>
+              {'\u2022\u2022\u2022\u2022'}  {'\u2022\u2022\u2022\u2022'}  {'\u2022\u2022\u2022\u2022'}  {vc?.last_four || '----'}
+            </Text>
+            <Text style={s.cardType}>VIRTUAL</Text>
+          </View>
+        </LinearGradient>
+
+        <Text style={s.sectionLabel}>Linked accounts</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.linkedRow}
+          contentContainerStyle={s.linkedContent}
+        >
+          {cards.map((c) => (
+            <View key={c.id} style={[s.linkedCard, { borderColor: c.color + '44' }]}>
+              <View style={[s.linkedDot, { backgroundColor: c.color }]} />
+              <View>
+                <Text style={s.linkedName}>{c.card_name}</Text>
+                <Text style={s.linkedMeta}>
+                  {c.card_type.toUpperCase()} {'\u00B7'} {c.last_four}
+                </Text>
+              </View>
+              <Text style={s.linkedBalance}>
+                {'\u00A3'}{c.balance.toFixed(0)}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        {hrOn && budget != null && (
+          <View style={s.budgetBar}>
+            <View style={s.budgetTop}>
+              <Text style={s.budgetLabel}>Tonight's budget</Text>
+              <Text style={s.budgetAmount}>
+                {'\u00A3'}{remaining} <Text style={s.budgetOf}>/ {'\u00A3'}{budget}</Text>
+              </Text>
+            </View>
             <View style={s.bar}>
               <View style={[s.barFill, { width: `${Math.min(100, (remaining / budget) * 100)}%` }]} />
             </View>
-            <View style={s.heroMeta}>
-              <Text style={s.heroSub}>{'\u00A3'}{budget} budget</Text>
-              {settings.high_risk_unit_label ? (
-                <Text style={s.heroSub}>
-                  {Math.floor(remaining / (settings.high_risk_unit_cost || 1))} {settings.high_risk_unit_label} left
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        ) : (
-          <View style={s.hero}>
-            <Text style={s.heroLabel}>all clear</Text>
-            <Text style={[s.heroAmount, { fontSize: 32 }]}>No active budget</Text>
+            {settings.high_risk_unit_label ? (
+              <Text style={s.budgetUnits}>
+                ~{Math.floor(remaining / (settings.high_risk_unit_cost || 1))} {settings.high_risk_unit_label} left
+              </Text>
+            ) : null}
           </View>
         )}
 
@@ -102,21 +170,30 @@ export default function HomeScreen({ navigation }) {
               </Text>
               <Text style={s.suggestionReason}>{suggestion.suggestion.reason}</Text>
               <Text style={s.suggestionBudget}>
-                Recommended: {'\u00A3'}{suggestion.suggestion.recommended_budget} · {Math.round(suggestion.suggestion.confidence * 100)}% confidence
+                Recommended: {'\u00A3'}{suggestion.suggestion.recommended_budget} {'\u00B7'} {Math.round(suggestion.suggestion.confidence * 100)}% confidence
               </Text>
             </View>
             <Text style={s.arrow}>{'\u203A'}</Text>
           </TouchableOpacity>
         )}
 
-        <Text style={s.listLabel}>Transactions</Text>
-        {transactions.map((tx) => (
+        <Text style={s.sectionLabel}>Transactions</Text>
+        {txns.map((tx) => (
           <View key={tx.id} style={s.tx}>
             <View style={s.txLeft}>
               <Text style={s.txName}>{tx.merchant}</Text>
-              <Text style={s.txTime}>{tx.time}</Text>
+              <View style={s.txMeta}>
+                <View style={[s.txDot, { backgroundColor: tx.source_color }]} />
+                <Text style={s.txSource}>{tx.source_card}</Text>
+                <Text style={s.txTime}>{'\u00B7'} {formatDate(tx.timestamp)} {formatTime(tx.timestamp)}</Text>
+              </View>
             </View>
-            <Text style={s.txAmount}>-{'\u00A3'}{tx.amount.toFixed(2)}</Text>
+            <View style={s.txRight}>
+              <Text style={[s.txAmount, tx.was_blocked && s.txAmountBlocked]}>
+                -{'\u00A3'}{tx.amount.toFixed(2)}
+              </Text>
+              {tx.was_blocked && <Text style={s.txBlocked}>BLOCKED</Text>}
+            </View>
           </View>
         ))}
 
@@ -195,22 +272,154 @@ const s = StyleSheet.create({
     fontSize: 20,
     color: colors.text,
     marginTop: 20,
-    marginBottom: 40,
+    marginBottom: 28,
   },
 
-  hero: { marginBottom: 44 },
-  heroLabel: {
-    fontFamily: font.regular,
-    fontSize: 15,
-    color: colors.sub,
-    marginBottom: 6,
+  card: {
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: colors.brand + '18',
   },
-  heroAmount: {
+  cardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  cardLabel: {
+    fontFamily: font.semi,
+    fontSize: 14,
+    color: colors.sub,
+    letterSpacing: 1,
+  },
+  cardBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: colors.muted + '33',
+  },
+  cardBadgeActive: {
+    backgroundColor: colors.brand + '22',
+  },
+  cardBadgeText: {
+    fontFamily: font.semi,
+    fontSize: 10,
+    color: colors.muted,
+    letterSpacing: 1,
+  },
+  cardBadgeTextActive: {
+    color: colors.brand,
+  },
+  cardBalance: {
     fontFamily: font.bold,
-    fontSize: 56,
+    fontSize: 42,
     color: colors.text,
-    letterSpacing: -2,
-    marginBottom: 16,
+    letterSpacing: -1.5,
+  },
+  cardBalanceSub: {
+    fontFamily: font.regular,
+    fontSize: 13,
+    color: colors.muted,
+    marginTop: 4,
+    marginBottom: 28,
+  },
+  cardBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardNumber: {
+    fontFamily: font.medium,
+    fontSize: 14,
+    color: colors.muted,
+    letterSpacing: 2,
+  },
+  cardType: {
+    fontFamily: font.semi,
+    fontSize: 11,
+    color: colors.sub,
+    letterSpacing: 2,
+  },
+
+  sectionLabel: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.muted,
+    marginBottom: 12,
+  },
+
+  linkedRow: {
+    marginBottom: 28,
+    marginHorizontal: -24,
+  },
+  linkedContent: {
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  linkedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    gap: 10,
+    flexShrink: 0,
+  },
+  linkedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  linkedName: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.text,
+  },
+  linkedMeta: {
+    fontFamily: font.regular,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  linkedBalance: {
+    fontFamily: font.semi,
+    fontSize: 14,
+    color: colors.sub,
+    marginLeft: 8,
+  },
+
+  budgetBar: {
+    backgroundColor: colors.brandDim,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: colors.brand + '22',
+  },
+  budgetTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  budgetLabel: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.brand,
+  },
+  budgetAmount: {
+    fontFamily: font.semi,
+    fontSize: 15,
+    color: colors.text,
+  },
+  budgetOf: {
+    fontFamily: font.regular,
+    fontSize: 13,
+    color: colors.muted,
   },
   bar: {
     height: 4,
@@ -222,19 +431,15 @@ const s = StyleSheet.create({
     backgroundColor: colors.brand,
     borderRadius: 2,
   },
-  heroMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  heroSub: {
+  budgetUnits: {
     fontFamily: font.regular,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.muted,
+    marginTop: 8,
   },
 
   modes: {
-    marginBottom: 40,
+    marginBottom: 24,
   },
   modeRow: {
     flexDirection: 'row',
@@ -265,12 +470,41 @@ const s = StyleSheet.create({
     color: colors.muted,
   },
 
-  listLabel: {
-    fontFamily: font.medium,
-    fontSize: 13,
-    color: colors.muted,
-    marginBottom: 8,
+  suggestionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.brandDim,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.brand + '33',
   },
+  suggestionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.brand,
+    marginRight: 12,
+  },
+  suggestionTitle: {
+    fontFamily: font.semi,
+    fontSize: 14,
+    color: colors.brand,
+  },
+  suggestionReason: {
+    fontFamily: font.regular,
+    fontSize: 12,
+    color: colors.sub,
+    marginTop: 3,
+  },
+  suggestionBudget: {
+    fontFamily: font.regular,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
+
   tx: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,16 +519,44 @@ const s = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
   },
+  txMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+    gap: 5,
+  },
+  txDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  txSource: {
+    fontFamily: font.regular,
+    fontSize: 12,
+    color: colors.sub,
+  },
   txTime: {
     fontFamily: font.regular,
     fontSize: 12,
     color: colors.muted,
-    marginTop: 2,
+  },
+  txRight: {
+    alignItems: 'flex-end',
   },
   txAmount: {
     fontFamily: font.semi,
     fontSize: 15,
     color: colors.sub,
+  },
+  txAmountBlocked: {
+    color: colors.red,
+  },
+  txBlocked: {
+    fontFamily: font.semi,
+    fontSize: 9,
+    color: colors.red,
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
 
   demoSection: {

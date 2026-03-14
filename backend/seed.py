@@ -15,27 +15,26 @@ BASE_DATE = datetime(2026, 3, 1, 10, 0, 0)
 WEEKDAY_LUNCH = [
     ("Pret A Manger", "food_and_drink", 4.20, 6.80),
     ("Tesco Express", "grocery", 3.50, 12.00),
-    ("Greggs", "food_and_drink", 2.80, 5.50),
     ("Costa Coffee", "food_and_drink", 3.00, 5.50),
-    ("Boots", "pharmacy", 2.50, 8.00),
+    ("Jannettas Gelateria", "food_and_drink", 3.50, 7.00),
     ("Sainsbury's Local", "grocery", 4.00, 15.00),
 ]
 
 BAR_MERCHANTS = [
-    ("Wetherspoons", "bars_and_pubs", 8.00, 28.00),
-    ("The Crown", "bars_and_pubs", 10.00, 35.00),
-    ("All Bar One", "bars_and_pubs", 12.00, 30.00),
-    ("BrewDog", "bars_and_pubs", 9.00, 25.00),
+    ("The Vic", "bars_and_pubs", 8.00, 28.00),
+    ("Aikman's", "bars_and_pubs", 10.00, 35.00),
+    ("The Rule", "bars_and_pubs", 12.00, 30.00),
+    ("Lizard Lounge", "bars_and_pubs", 9.00, 25.00),
 ]
 
 OUTLIERS = [
-    ("Currys", "electronics", 89.99),
+    ("Argos", "electronics", 89.99),
     ("Zara", "clothing", 64.50),
     ("ASOS", "clothing", 47.99),
 ]
 
 TRANSPORT = [
-    ("TfL", "transport", 2.80, 6.50),
+    ("Stagecoach", "transport", 2.80, 6.50),
     ("Uber", "transport", 8.00, 22.00),
 ]
 
@@ -55,12 +54,17 @@ def generate_transactions():
             ts = date.replace(hour=lunch_hour, minute=lunch_min)
             txns.append((ts, amount, merchant, cat, False, None))
 
-            if random.random() < 0.5:
+            if random.random() < 0.7:
                 m2, c2, l2, h2 = random.choice(WEEKDAY_LUNCH)
                 ts2 = date.replace(hour=random.randint(7, 9), minute=random.randint(0, 55))
                 txns.append((ts2, round(random.uniform(l2, h2), 2), m2, c2, False, None))
 
-            if random.random() < 0.4:
+            if random.random() < 0.6:
+                m4, c4, l4, h4 = random.choice(WEEKDAY_LUNCH)
+                ts4 = date.replace(hour=random.randint(15, 17), minute=random.randint(0, 55))
+                txns.append((ts4, round(random.uniform(l4, h4), 2), m4, c4, False, None))
+
+            if random.random() < 0.6:
                 m3, c3, l3, h3 = random.choice(TRANSPORT)
                 ts3 = date.replace(hour=random.randint(17, 19), minute=random.randint(0, 55))
                 txns.append((ts3, round(random.uniform(l3, h3), 2), m3, c3, False, None))
@@ -106,19 +110,79 @@ def compute_risk_score(amount, hour, was_blocked):
     return max(0, min(100, score))
 
 
+LINKED_CARDS = [
+    ("card-monzo", "demo-user", "Monzo Current", "visa", "3421", 847.30, "#FF5733"),
+    ("card-barclays", "demo-user", "Barclays Student", "visa", "9012", 1240.00, "#0A84FF"),
+    ("card-revolut", "demo-user", "Revolut", "mastercard", "5567", 163.45, "#8B5CF6"),
+]
+
+
 def main():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
+    c.executescript("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id TEXT PRIMARY KEY,
+            block_threshold REAL,
+            high_risk_budget REAL,
+            high_risk_window_start TEXT,
+            high_risk_window_end TEXT,
+            real_world_unit_name TEXT,
+            real_world_unit_value REAL,
+            weekly_budget REAL,
+            nightly_sub_budget REAL
+        );
+        CREATE TABLE IF NOT EXISTS transaction_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            transaction_token TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            amount REAL NOT NULL,
+            merchant_name TEXT NOT NULL DEFAULT '',
+            merchant_category TEXT NOT NULL DEFAULT '',
+            mode_triggered TEXT,
+            was_blocked INTEGER NOT NULL DEFAULT 0,
+            user_decision TEXT,
+            decision_latency_ms INTEGER,
+            window_total_at_time REAL,
+            risk_score INTEGER,
+            is_outlier INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS linked_cards (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            card_name TEXT NOT NULL,
+            card_type TEXT NOT NULL,
+            last_four TEXT NOT NULL,
+            balance REAL NOT NULL DEFAULT 0,
+            color TEXT NOT NULL DEFAULT '#333333'
+        );
+        CREATE INDEX IF NOT EXISTS idx_events_user_ts
+            ON transaction_events (user_id, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_linked_cards_user
+            ON linked_cards (user_id);
+    """)
+
     c.execute("DELETE FROM transaction_events WHERE user_id = 'demo-user'")
     c.execute("DELETE FROM user_settings WHERE user_id = 'demo-user'")
+    c.execute("DELETE FROM linked_cards WHERE user_id = 'demo-user'")
 
     c.execute("""
         INSERT OR REPLACE INTO user_settings
         (user_id, block_threshold, high_risk_budget, high_risk_window_start,
-         high_risk_window_end, real_world_unit_name, real_world_unit_value)
-        VALUES ('demo-user', 50, 60, '18:00', '02:00', 'drinks', 6)
+         high_risk_window_end, real_world_unit_name, real_world_unit_value,
+         weekly_budget, nightly_sub_budget)
+        VALUES ('demo-user', 50, 60, '18:00', '02:00', 'drinks', 6, 120, 60)
     """)
+
+    for card in LINKED_CARDS:
+        c.execute(
+            """INSERT OR REPLACE INTO linked_cards
+               (id, user_id, card_name, card_type, last_four, balance, color)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            card,
+        )
 
     txns = generate_transactions()
     for i, (ts, amount, merchant, category, was_blocked, decision) in enumerate(txns):
@@ -160,7 +224,7 @@ def main():
         "SELECT COUNT(*) FROM transaction_events WHERE user_id='demo-user' AND user_decision='approved'"
     ).fetchone()[0]
 
-    print(f"Seeded {count} transactions for demo-user")
+    print(f"Seeded {count} transactions, {len(LINKED_CARDS)} linked cards for demo-user")
     print(f"  Blocked: {blocked}, Overrides: {overrides}")
     print(f"  Override rate: {overrides/blocked*100:.0f}%" if blocked else "  No blocks")
 

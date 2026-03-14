@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
+  Image,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getDashboard } from '../api/client';
 import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
+
+const RISK_COLORS = { high: '#ff5252', medium: '#e6a817', low: '#1a6b4a' };
 
 function StatCard({ label, value, sub }) {
   return (
@@ -54,6 +58,129 @@ function MiniBarChart({ data, valueKey, labelKey, color, height = 60 }) {
   );
 }
 
+function PulsingDot({ size, color }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <Animated.View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: color, opacity,
+    }} />
+  );
+}
+
+const MAP_IMG = require('../../assets/st-andrews-dark.png');
+
+function RiskMap({ data }) {
+  const [tooltip, setTooltip] = useState(null);
+  if (!data || data.length === 0) return null;
+
+  const maxCount = Math.max(...data.map(d => d.count), 1);
+
+  return (
+    <View style={s.mapCard}>
+      <Text style={s.mapTitle}>St Andrews risk map</Text>
+      <View style={s.mapContainer}>
+        <Image source={MAP_IMG} style={s.mapImage} resizeMode="cover" />
+
+        {data.map((m) => {
+          const dotSize = 6 + ((m.count / maxCount) * 6);
+          const dotColor = RISK_COLORS[m.risk_level];
+          const isHigh = m.risk_level === 'high';
+          return (
+            <TouchableOpacity
+              key={m.name}
+              activeOpacity={0.7}
+              onPress={() => setTooltip(tooltip === m.name ? null : m.name)}
+              style={[s.dotWrap, {
+                left: `${m.x}%`,
+                top: `${m.y}%`,
+                marginLeft: -dotSize / 2,
+                marginTop: -dotSize / 2,
+              }]}
+            >
+              {isHigh ? (
+                <PulsingDot size={dotSize} color={dotColor} />
+              ) : (
+                <View style={{
+                  width: dotSize, height: dotSize, borderRadius: dotSize / 2,
+                  backgroundColor: dotColor, opacity: 0.75,
+                }} />
+              )}
+              {tooltip === m.name && (
+                <View style={s.tooltip}>
+                  <Text style={s.tooltipText}>{m.name}</Text>
+                  <Text style={s.tooltipSub}>{'£'}{m.total_spent.toFixed(0)} ({m.count}x)</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={s.legendRow}>
+        {['high', 'medium', 'low'].map(level => (
+          <View key={level} style={s.legendItem}>
+            <View style={[s.legendDot, { backgroundColor: RISK_COLORS[level] }]} />
+            <Text style={s.legendText}>{level}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function WeeklyBudget({ summary }) {
+  if (!summary) return null;
+  const { weekly_budget, weekly_spent, weekly_remaining, nightly_breakdown, nightly_sub_budget } = summary;
+  const weekPct = weekly_budget > 0 ? Math.min(100, (weekly_spent / weekly_budget) * 100) : 0;
+  const weekColor = weekPct >= 100 ? colors.red : weekPct >= 80 ? '#e6a817' : colors.brand;
+
+  return (
+    <View style={s.weekCard}>
+      <Text style={s.weekTitle}>Weekly budget</Text>
+      <Text style={s.weekAmount}>
+        {'£'}{weekly_spent.toFixed(0)} of {'£'}{weekly_budget.toFixed(0)} this week
+      </Text>
+      <View style={s.weekTrack}>
+        <View style={[s.weekFill, { width: `${weekPct}%`, backgroundColor: weekColor }]} />
+      </View>
+      <Text style={[s.weekRemaining, { color: weekly_remaining < 0 ? colors.red : colors.sub }]}>
+        {'£'}{Math.abs(weekly_remaining).toFixed(0)} {weekly_remaining >= 0 ? 'remaining' : 'over'}
+      </Text>
+
+      {nightly_breakdown.length > 0 && (
+        <>
+          <Text style={s.nightsLabel}>Nightly breakdown</Text>
+          {nightly_breakdown.map((n) => {
+            const pct = Math.min(100, n.pct_used);
+            const barColor = pct >= 100 ? colors.red : pct >= 80 ? '#e6a817' : colors.brand;
+            return (
+              <View key={n.date} style={s.nightRow}>
+                <Text style={s.nightDate}>{n.date.slice(5)}</Text>
+                <View style={s.nightTrack}>
+                  <View style={[s.nightFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+                </View>
+                <Text style={s.nightVal}>
+                  {'£'}{n.total.toFixed(0)}/{'£'}{nightly_sub_budget.toFixed(0)}
+                </Text>
+              </View>
+            );
+          })}
+        </>
+      )}
+    </View>
+  );
+}
+
 export default function DashboardScreen({ navigation }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +217,7 @@ export default function DashboardScreen({ navigation }) {
     );
   }
 
-  const { stats, overrides, risk_distribution, top_merchants, hourly_heatmap, daily_heatmap, outliers } = data;
+  const { stats, overrides, risk_distribution, top_merchants, hourly_heatmap, daily_heatmap, outliers, risk_map, weekly_summary } = data;
   const riskMax = Math.max(...risk_distribution, 1);
   const merchantMax = top_merchants.length > 0 ? top_merchants[0].total : 1;
   const riskLabels = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80-89', '90-100'];
@@ -106,7 +233,7 @@ export default function DashboardScreen({ navigation }) {
 
         <View style={s.statGrid}>
           <StatCard label="Transactions" value={stats.total_transactions} />
-          <StatCard label="Total spent" value={`\u00A3${stats.total_spent.toFixed(0)}`} />
+          <StatCard label="Total spent" value={`£${stats.total_spent.toFixed(0)}`} />
           <StatCard
             label="Override rate"
             value={`${(overrides.override_rate * 100).toFixed(0)}%`}
@@ -118,19 +245,23 @@ export default function DashboardScreen({ navigation }) {
           />
         </View>
 
+        <RiskMap data={risk_map} />
+
+        <WeeklyBudget summary={weekly_summary} />
+
         <View style={s.profileCard}>
           <Text style={s.profileLabel}>Spending profile</Text>
           <View style={s.profileRow}>
             <View style={s.profileItem}>
-              <Text style={s.profileValue}>{'\u00A3'}{stats.avg_amount.toFixed(2)}</Text>
+              <Text style={s.profileValue}>{'£'}{stats.avg_amount.toFixed(2)}</Text>
               <Text style={s.profileSub}>avg</Text>
             </View>
             <View style={s.profileItem}>
-              <Text style={s.profileValue}>{'\u00A3'}{stats.std_amount.toFixed(2)}</Text>
+              <Text style={s.profileValue}>{'£'}{stats.std_amount.toFixed(2)}</Text>
               <Text style={s.profileSub}>std dev</Text>
             </View>
             <View style={s.profileItem}>
-              <Text style={s.profileValue}>{'\u00A3'}{stats.suggested_threshold.toFixed(0)}</Text>
+              <Text style={s.profileValue}>{'£'}{stats.suggested_threshold.toFixed(0)}</Text>
               <Text style={s.profileSub}>suggested limit</Text>
             </View>
           </View>
@@ -184,7 +315,7 @@ export default function DashboardScreen({ navigation }) {
                   <Text style={s.outlierTime}>{o.timestamp.slice(0, 16).replace('T', ' ')}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={s.outlierAmount}>{'\u00A3'}{o.amount.toFixed(2)}</Text>
+                  <Text style={s.outlierAmount}>{'£'}{o.amount.toFixed(2)}</Text>
                   <Text style={s.outlierRisk}>risk {o.risk_score}</Text>
                 </View>
               </View>
@@ -214,6 +345,69 @@ const s = StyleSheet.create({
   statValue: { fontFamily: font.bold, fontSize: 24, color: colors.text, letterSpacing: -1 },
   statLabel: { fontFamily: font.regular, fontSize: 12, color: colors.muted, marginTop: 4 },
   statSub: { fontFamily: font.regular, fontSize: 11, color: colors.sub, marginTop: 2 },
+
+  // Risk Map
+  mapCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  mapTitle: { fontFamily: font.medium, fontSize: 13, color: colors.muted, marginBottom: 12 },
+  mapContainer: {
+    width: '100%',
+    aspectRatio: 800 / 600,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mapImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+    opacity: 0.95,
+  },
+  dotWrap: {
+    position: 'absolute',
+    zIndex: 2,
+    alignItems: 'center',
+  },
+  tooltip: {
+    position: 'absolute',
+    top: -36,
+    backgroundColor: '#222230',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  tooltipText: { fontFamily: font.medium, fontSize: 10, color: colors.text },
+  tooltipSub: { fontFamily: font.regular, fontSize: 9, color: colors.sub },
+  legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 10 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontFamily: font.regular, fontSize: 10, color: colors.muted },
+
+  // Weekly Budget
+  weekCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  weekTitle: { fontFamily: font.medium, fontSize: 13, color: colors.muted, marginBottom: 8 },
+  weekAmount: { fontFamily: font.semi, fontSize: 16, color: colors.text, marginBottom: 8 },
+  weekTrack: { height: 8, backgroundColor: colors.divider, borderRadius: 4, overflow: 'hidden' },
+  weekFill: { height: 8, borderRadius: 4 },
+  weekRemaining: { fontFamily: font.regular, fontSize: 12, marginTop: 6 },
+  nightsLabel: { fontFamily: font.medium, fontSize: 12, color: colors.muted, marginTop: 14, marginBottom: 8 },
+  nightRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
+  nightDate: { fontFamily: font.regular, fontSize: 10, color: colors.muted, width: 40 },
+  nightTrack: { flex: 1, height: 5, backgroundColor: colors.divider, borderRadius: 3, marginHorizontal: 8, overflow: 'hidden' },
+  nightFill: { height: 5, borderRadius: 3 },
+  nightVal: { fontFamily: font.regular, fontSize: 10, color: colors.sub, width: 56, textAlign: 'right' },
 
   profileCard: {
     backgroundColor: colors.card,

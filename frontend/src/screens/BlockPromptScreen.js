@@ -11,7 +11,7 @@ import { decideTransaction } from '../api/client';
 import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
-const BASE_SECONDS = 40;
+const BASE_SECONDS = 5;
 
 function computeWaitSeconds({ amount, blocksToday, overridesLast30d }) {
   const amountFactor = Math.min(amount / 200, 1);

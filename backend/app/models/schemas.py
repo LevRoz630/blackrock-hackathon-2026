@@ -75,3 +75,36 @@ class FcmTokenRequest(BaseModel):
 class FcmTokenResponse(BaseModel):
     user_id: str
     fcm_token: str
+
+
+class LinkedCard(BaseModel):
+    id: str
+    card_name: str
+    card_type: str
+    last_four: str
+    balance: float
+    color: str
+
+
+class VirtualCard(BaseModel):
+    last_four: str
+    total_balance: float
+    status: str
+    card_count: int
+
+
+class WalletTransaction(BaseModel):
+    id: int
+    merchant: str
+    amount: float
+    timestamp: str
+    category: str
+    was_blocked: bool
+    source_card: str
+    source_color: str
+
+
+class WalletResponse(BaseModel):
+    virtual_card: VirtualCard
+    linked_cards: list[LinkedCard]
+    recent_transactions: list[WalletTransaction]

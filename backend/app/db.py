@@ -25,7 +25,9 @@ async def init_db() -> None:
             high_risk_window_start TEXT,
             high_risk_window_end TEXT,
             real_world_unit_name TEXT,
-            real_world_unit_value REAL
+            real_world_unit_value REAL,
+            weekly_budget REAL,
+            nightly_sub_budget REAL
         );
 
         CREATE TABLE IF NOT EXISTS fcm_tokens (
@@ -69,6 +71,19 @@ async def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_events_user_ts
             ON transaction_events (user_id, timestamp);
+
+        CREATE TABLE IF NOT EXISTS linked_cards (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            card_name TEXT NOT NULL,
+            card_type TEXT NOT NULL,
+            last_four TEXT NOT NULL,
+            balance REAL NOT NULL DEFAULT 0,
+            color TEXT NOT NULL DEFAULT '#333333'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_linked_cards_user
+            ON linked_cards (user_id);
     """)
     await _db.commit()
 

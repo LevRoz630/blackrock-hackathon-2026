@@ -77,3 +77,7 @@ export function getDashboard(userId) {
 export function getModeSuggestion(userId) {
   return request('GET', `/users/${userId}/mode-suggestion`);
 }
+
+export function getWallet(userId) {
+  return request('GET', `/users/${userId}/wallet`);
+}

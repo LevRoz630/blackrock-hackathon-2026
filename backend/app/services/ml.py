@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 
 import numpy as np
@@ -10,6 +10,25 @@ from sklearn.ensemble import IsolationForest
 from app.db import get_db
 
 MIN_HISTORY = 10
+
+# St Andrews town grid (0-100). X: west->east, Y: north->south.
+# Three main streets run roughly W->E, fanning out from West Port:
+#   North St ~ y 20, Market St ~ y 48, South St ~ y 76
+MERCHANT_LOCATIONS: dict[str, dict[str, float]] = {
+    "The Vic":             {"x": 34.6, "y": 37.7},
+    "Aikman's":            {"x": 59.2, "y": 56.3},
+    "The Rule":            {"x": 71.9, "y": 67.3},
+    "Lizard Lounge":       {"x": 63.7, "y": 29.0},
+    "Tesco Express":       {"x": 56.9, "y": 47.6},
+    "Pret A Manger":       {"x": 45.5, "y": 43.2},
+    "Costa Coffee":        {"x": 50.1, "y": 61.8},
+    "Jannettas Gelateria": {"x": 61.5, "y": 62.9},
+    "Sainsbury's Local":   {"x": 79.7, "y": 69.5},
+    "Stagecoach":          {"x": 22.8, "y": 50.9},
+    "Uber":                {"x": 52.4, "y": 47.6},
+    "Argos":               {"x": 29.6, "y": 50.9},
+    "Zara":                {"x": 47.8, "y": 45.4},
+}
 
 
 @dataclass
@@ -247,6 +266,10 @@ def _features_to_dict(f: TransactionFeatures) -> dict:
     }
 
 
+def _is_high_risk_hour(hour: int) -> bool:
+    return hour >= 18 or hour < 2
+
+
 async def get_dashboard_data(user_id: str) -> dict:
     db = await get_db()
     rows = await db.execute_fetchall(
@@ -317,6 +340,94 @@ async def get_dashboard_data(user_id: str) -> dict:
         for r in rows if r[8]
     ]
 
+    # --- risk map: per-merchant aggregation with location ---
+    merchant_agg: dict[str, dict] = {}
+    for r in rows:
+        name = r[2] or "Unknown"
+        if name not in merchant_agg:
+            merchant_agg[name] = {"total": 0.0, "count": 0, "blocked": 0}
+        merchant_agg[name]["total"] += r[0]
+        merchant_agg[name]["count"] += 1
+        merchant_agg[name]["blocked"] += 1 if r[4] else 0
+
+    risk_map = []
+    for name, agg in merchant_agg.items():
+        loc = MERCHANT_LOCATIONS.get(name)
+        if not loc:
+            continue
+        block_rate = agg["blocked"] / agg["count"] if agg["count"] else 0
+        if block_rate > 0.3:
+            risk_level = "high"
+        elif block_rate > 0.1:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        risk_map.append({
+            "name": name,
+            "x": loc["x"],
+            "y": loc["y"],
+            "total_spent": round(agg["total"], 2),
+            "count": agg["count"],
+            "block_rate": round(block_rate, 2),
+            "risk_level": risk_level,
+        })
+
+    # --- weekly summary ---
+    settings_row = await db.execute_fetchall(
+        "SELECT weekly_budget, nightly_sub_budget FROM user_settings WHERE user_id = ?",
+        (user_id,),
+    )
+    weekly_budget = 120.0
+    nightly_sub_budget = 60.0
+    if settings_row:
+        weekly_budget = settings_row[0][0] or 120.0
+        nightly_sub_budget = settings_row[0][1] or 60.0
+
+    now = datetime.now()
+    monday = now - timedelta(days=now.weekday())
+    week_start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    week_txns = [
+        r for r in rows
+        if datetime.fromisoformat(r[1]) >= week_start
+    ]
+    weekly_spent = sum(r[0] for r in week_txns)
+
+    night_txns = [
+        r for r in week_txns
+        if _is_high_risk_hour(datetime.fromisoformat(r[1]).hour)
+    ]
+    night_spent = sum(r[0] for r in night_txns)
+
+    nightly_buckets: dict[str, float] = {}
+    for r in night_txns:
+        ts = datetime.fromisoformat(r[1])
+        night_key = (ts - timedelta(hours=6)).strftime("%Y-%m-%d")
+        nightly_buckets[night_key] = nightly_buckets.get(night_key, 0) + r[0]
+
+    nightly_breakdown = [
+        {
+            "date": d,
+            "total": round(t, 2),
+            "budget": nightly_sub_budget,
+            "pct_used": round(t / nightly_sub_budget * 100, 1) if nightly_sub_budget else 0,
+        }
+        for d, t in sorted(nightly_buckets.items())
+    ]
+    nights_used = len(nightly_buckets)
+    avg_per_night = round(night_spent / nights_used, 2) if nights_used else 0
+
+    weekly_summary = {
+        "weekly_budget": weekly_budget,
+        "weekly_spent": round(weekly_spent, 2),
+        "weekly_remaining": round(weekly_budget - weekly_spent, 2),
+        "night_spent": round(night_spent, 2),
+        "nights_used": nights_used,
+        "avg_per_night": avg_per_night,
+        "nightly_sub_budget": nightly_sub_budget,
+        "nightly_breakdown": nightly_breakdown,
+    }
+
     return {
         "stats": {
             "total_transactions": len(rows),
@@ -337,6 +448,8 @@ async def get_dashboard_data(user_id: str) -> dict:
         "daily_heatmap": daily,
         "daily_velocity": velocity_series,
         "outliers": outlier_list,
+        "risk_map": risk_map,
+        "weekly_summary": weekly_summary,
     }
 
 
@@ -409,7 +522,7 @@ async def get_mode_suggestion(user_id: str) -> dict:
         confidence += 0.2
 
     if dow_now >= 4 and hour_now >= 18:
-        signals.append("Weekend evening — historically high-risk period")
+        signals.append("Weekend evening -- historically high-risk period")
         confidence += 0.15
 
     risky_cats = [
@@ -418,6 +531,25 @@ async def get_mode_suggestion(user_id: str) -> dict:
     ]
     if risky_cats:
         confidence += 0.05
+
+    # Weekly budget pacing check
+    srow = await db.execute_fetchall(
+        "SELECT weekly_budget, nightly_sub_budget FROM user_settings WHERE user_id = ?",
+        (user_id,),
+    )
+    if srow and srow[0][0]:
+        wb = srow[0][0]
+        nb = srow[0][1] or wb
+        wk_start = now - timedelta(days=now.weekday())
+        wk_start = wk_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_spend = sum(
+            r[0] for r in rows
+            if datetime.fromisoformat(r[1]) >= wk_start
+        )
+        wr = wb - week_spend
+        if wr < nb:
+            signals.append(f"Weekly budget tight ({wr:.0f} left of {wb:.0f})")
+            confidence += 0.2
 
     confidence = min(1.0, confidence)
 
@@ -452,6 +584,174 @@ async def get_mode_suggestion(user_id: str) -> dict:
             "recommended_window_minutes": 180,
         },
     }
+
+
+LOCATION_ZONES: dict[str, list[str]] = {
+    "nightlife": ["The Vic", "Aikman's", "The Rule", "Lizard Lounge"],
+    "food": ["Tesco Express", "Pret A Manger", "Jannettas Gelateria", "Sainsbury's Local"],
+    "shopping": ["Argos", "Zara", "Costa Coffee"],
+    "transport": ["Stagecoach", "Uber"],
+}
+
+ZONE_BY_MERCHANT: dict[str, str] = {}
+for _zone, _merchants in LOCATION_ZONES.items():
+    for _m in _merchants:
+        ZONE_BY_MERCHANT[_m] = _zone
+
+
+def _classify_zone(merchant: str) -> str:
+    return ZONE_BY_MERCHANT.get(merchant, "other")
+
+
+async def compute_auto_mode(
+    user_id: str,
+    current_hour: int | None = None,
+    current_dow: int | None = None,
+    current_location: str | None = None,
+) -> dict:
+    now = datetime.now(timezone.utc)
+    hour = current_hour if current_hour is not None else now.hour
+    dow = current_dow if current_dow is not None else now.weekday()
+    zone = _classify_zone(current_location or "")
+
+    rows, merchant_counts = await _load_user_history(user_id)
+
+    if len(rows) < MIN_HISTORY:
+        return {
+            "auto_activate": False,
+            "reason": f"Need {MIN_HISTORY - len(rows)} more transactions to learn your patterns",
+        }
+
+    context_rows = []
+    wider_rows = []
+    for r in rows:
+        ts = datetime.fromisoformat(r[1])
+        r_dow = ts.weekday()
+        r_hour = ts.hour
+        r_zone = _classify_zone(r[2] or "")
+
+        dow_match = abs(r_dow - dow) <= 1 or abs(r_dow - dow) >= 6
+        hour_match = abs(r_hour - hour) <= 2 or abs(r_hour - hour) >= 22
+
+        if dow_match and hour_match:
+            wider_rows.append(r)
+            if zone != "other" and r_zone == zone:
+                context_rows.append(r)
+
+    best_rows = context_rows if len(context_rows) >= 5 else wider_rows
+
+    if len(best_rows) < 3:
+        is_evening = hour >= 18 or hour < 2
+        is_weekend = dow >= 4
+        if is_evening and is_weekend:
+            return {
+                "auto_activate": True,
+                "mode": "high_risk",
+                "reason": "Weekend evening — limited history, using safe defaults",
+                "optimal_ceiling": 50.0,
+                "savings_target": 42.0,
+                "confidence": 0.3,
+                "basis": "default",
+            }
+        return {"auto_activate": False, "reason": "Not enough pattern data for this context"}
+
+    amounts = [r[0] for r in best_rows]
+    total_per_session = _estimate_session_totals(best_rows)
+
+    if total_per_session:
+        typical_session = sum(total_per_session) / len(total_per_session)
+        p75 = sorted(total_per_session)[int(len(total_per_session) * 0.75)]
+        median = sorted(total_per_session)[len(total_per_session) // 2]
+    else:
+        typical_session = sum(amounts)
+        p75 = typical_session
+        median = typical_session
+
+    savings_factor = 0.85
+    optimal = round(p75 * savings_factor / 5) * 5
+    optimal = max(15.0, optimal)
+
+    confidence_signals = []
+    confidence = 0.0
+
+    if len(best_rows) >= 10:
+        confidence += 0.3
+        confidence_signals.append(f"Strong history ({len(best_rows)} similar transactions)")
+    elif len(best_rows) >= 5:
+        confidence += 0.15
+        confidence_signals.append(f"Moderate history ({len(best_rows)} similar transactions)")
+
+    is_evening = hour >= 18 or hour < 2
+    is_weekend = dow >= 4
+    if is_evening:
+        confidence += 0.15
+        confidence_signals.append("Evening hours — historically higher spend")
+    if is_weekend:
+        confidence += 0.1
+        confidence_signals.append("Weekend — historically higher spend")
+
+    if zone == "nightlife":
+        confidence += 0.25
+        confidence_signals.append("Nightlife area — high risk zone")
+    elif zone == "food":
+        confidence += 0.05
+
+    blocked_in_context = sum(1 for r in best_rows if len(r) > 4 and r[4])
+    if len(best_rows) > 0:
+        block_rate = blocked_in_context / len(best_rows)
+        if block_rate > 0.2:
+            confidence += 0.15
+            confidence_signals.append(f"High block rate in this context ({block_rate:.0%})")
+
+    confidence = min(1.0, confidence)
+
+    mode = "high_risk"
+    if confidence > 0.6 and not is_evening:
+        mode = "block"
+
+    should_activate = confidence >= 0.35
+
+    return {
+        "auto_activate": should_activate,
+        "mode": mode,
+        "optimal_ceiling": round(p75, 2),
+        "savings_target": float(optimal),
+        "typical_session_spend": round(typical_session, 2),
+        "median_session_spend": round(median, 2),
+        "confidence": round(confidence, 2),
+        "signals": confidence_signals,
+        "context": {
+            "hour": hour,
+            "day_of_week": dow,
+            "zone": zone if zone != "other" else None,
+            "matching_transactions": len(best_rows),
+        },
+        "reason": confidence_signals[0] if confidence_signals else "Pattern match",
+        "basis": "location" if context_rows and len(context_rows) >= 5 else "time",
+    }
+
+
+def _estimate_session_totals(rows: list[tuple]) -> list[float]:
+    if not rows:
+        return []
+
+    sessions: list[float] = []
+    current_total = 0.0
+    last_ts = None
+
+    for r in rows:
+        ts = datetime.fromisoformat(r[1])
+        if last_ts and (ts - last_ts).total_seconds() > 3600:
+            if current_total > 0:
+                sessions.append(current_total)
+            current_total = 0.0
+        current_total += r[0]
+        last_ts = ts
+
+    if current_total > 0:
+        sessions.append(current_total)
+
+    return sessions
 
 
 async def get_user_spending_profile(user_id: str) -> dict:

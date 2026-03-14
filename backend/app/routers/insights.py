@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.services.events import get_user_insights
 from app.services.ml import (
     assess_transaction,
+    compute_auto_mode,
     get_dashboard_data,
     get_mode_suggestion,
     get_user_spending_profile,
@@ -29,6 +30,16 @@ async def dashboard(user_id: str) -> dict:
 @router.get("/{user_id}/mode-suggestion")
 async def mode_suggestion(user_id: str) -> dict:
     return await get_mode_suggestion(user_id)
+
+
+@router.get("/{user_id}/auto-mode")
+async def auto_mode(
+    user_id: str,
+    hour: int | None = None,
+    dow: int | None = None,
+    location: str | None = None,
+) -> dict:
+    return await compute_auto_mode(user_id, hour, dow, location)
 
 
 @router.post("/{user_id}/assess")
