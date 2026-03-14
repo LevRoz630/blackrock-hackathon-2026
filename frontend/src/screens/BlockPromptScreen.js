@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   Animated,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { decideTransaction } from '../api/client';
 import { colors, font } from '../theme';
 
@@ -54,7 +55,10 @@ function buildPrompts({ transaction, budget, remaining, blocksToday, overridesLa
 }
 
 export default function BlockPromptScreen({ route, navigation }) {
-  const { transaction, budget, remaining, blocksToday, overridesLast30d } = route.params;
+  const { transaction, budget, remaining, blocksToday, overridesLast30d, riskScore } = route.params;
+  const risk = riskScore ?? Math.min(99, Math.round(40 + (transaction.amount / 20)));
+  const riskLevel = risk >= 70 ? 'high' : risk >= 40 ? 'medium' : 'low';
+  const riskColor = riskLevel === 'high' ? colors.red : riskLevel === 'medium' ? '#e6a817' : colors.brand;
   const totalSeconds = useRef(
     computeWaitSeconds({
       amount: transaction.amount,
@@ -75,10 +79,12 @@ export default function BlockPromptScreen({ route, navigation }) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     intervalRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(intervalRef.current);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           return 0;
         }
         return prev - 1;
@@ -101,6 +107,7 @@ export default function BlockPromptScreen({ route, navigation }) {
   const progress = (totalSeconds - secondsLeft) / totalSeconds;
 
   const handleApprove = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const latency = Date.now() - promptShownAt.current;
     decideTransaction({
       transaction_token: transaction.id,
@@ -114,6 +121,7 @@ export default function BlockPromptScreen({ route, navigation }) {
   };
 
   const handleDismiss = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const latency = Date.now() - promptShownAt.current;
     decideTransaction({
       transaction_token: transaction.id,
@@ -133,7 +141,11 @@ export default function BlockPromptScreen({ route, navigation }) {
     <SafeAreaView style={s.safe}>
       <View style={s.top}>
         <Text style={s.label}>Blocked</Text>
-        {isLateNight && <Text style={s.lateTag}>Late-night purchase</Text>}
+        <View style={[s.riskBadge, { backgroundColor: riskColor + '22', borderColor: riskColor + '44' }]}>
+          <View style={[s.riskDot, { backgroundColor: riskColor }]} />
+          <Text style={[s.riskText, { color: riskColor }]}>Risk: {riskLevel}</Text>
+        </View>
+        {isLateNight && <Text style={s.lateTag}>Late-night</Text>}
       </View>
 
       <View style={s.body}>
@@ -195,6 +207,25 @@ const s = StyleSheet.create({
     fontFamily: font.medium,
     fontSize: 14,
     color: colors.red,
+  },
+  riskBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    gap: 5,
+  },
+  riskDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  riskText: {
+    fontFamily: font.semi,
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
   lateTag: {
     fontFamily: font.medium,

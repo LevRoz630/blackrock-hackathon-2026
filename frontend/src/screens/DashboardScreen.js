@@ -210,8 +210,8 @@ export default function DashboardScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={s.back}>{'\u2190'} Back</Text>
           </TouchableOpacity>
-          <Text style={[s.sectionTitle, { marginTop: 40 }]}>No data yet</Text>
-          <Text style={s.statSub}>Run seed.py to populate demo transactions.</Text>
+          <Text style={[s.sectionTitle, { marginTop: 40 }]}>No insights yet</Text>
+          <Text style={s.statSub}>Start using your card and insights will appear here.</Text>
         </View>
       </SafeAreaView>
     );

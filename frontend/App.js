@@ -16,6 +16,7 @@ import BlockPromptScreen from './src/screens/BlockPromptScreen';
 import HighRiskOverlayScreen from './src/screens/HighRiskOverlayScreen';
 import HighRiskPromptScreen from './src/screens/HighRiskPromptScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import DemoScreen from './src/screens/DemoScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -46,6 +47,7 @@ function AppContent() {
           options={{ gestureEnabled: false }}
         />
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
+        <Stack.Screen name="Demo" component={DemoScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

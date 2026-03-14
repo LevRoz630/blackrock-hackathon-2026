@@ -8,44 +8,61 @@ SpendPause sits between your card and the payment network. Every tap goes throug
 
 Two independent modes run simultaneously:
 
-**Block mode** — auto-declines purchases above a threshold. An adaptive timer (40–90s) forces a cooling-off period before you can approve. The timer gets longer based on transaction amount, override history, time of day, and spending velocity.
+**Block mode** — auto-declines purchases above a threshold. An adaptive timer (40–90s) forces a cooling-off period before you can approve. The timer scales based on transaction amount, override history, time of day, and spending velocity.
 
 **High Risk Environment** — sets a spending budget for a time window. Under budget: brief overlay shows remaining balance. Over budget: hard decline, no override.
 
-## ML features
+## Features
 
-### Anomaly detection
-IsolationForest trained on each user's transaction history. 8-feature vector: amount, hour, day of week, time since last transaction, amount vs average ratio, rolling 1-hour count, rolling 1-hour total, merchant frequency. Produces a 0–100 risk score and flags unusual patterns.
+### Screens
 
-### Auto-mode activation
-Analyses historical spending by day of week, hour, and location zone (nightlife, food, shopping, transport). When the current context matches a historically risky pattern, SpendPause auto-activates the appropriate mode.
+| Screen | What it does |
+|---|---|
+| **Home** | Virtual card with balance, linked accounts carousel, savings streak with pulsing animations, tonight's budget bar, ML-powered mode suggestions with confidence score, transaction feed with blocked badges |
+| **Block prompt** | Full-screen adaptive timer (40–90s), rotating deliberation prompts with real stats, risk badge (high/medium/low), late-night tag, haptic feedback, decision latency tracking |
+| **Under-budget overlay** | Blurred 3-second auto-dismiss flash showing remaining budget in £ and real-world units ("~3 drinks left") |
+| **Over-budget prompt** | Hard decline screen showing spent vs budget, amount over, approve/decline |
+| **Settings** | Toggle Block/High Risk independently, set thresholds, budgets, time windows, unit labels, cost per unit |
+| **Dashboard** | Risk map, weekly budget tracking with nightly breakdown, risk distribution histogram, hourly + daily heatmaps, outlier transactions, spending profile, top merchants |
 
-### Optimal spending ceiling
-Instead of users guessing their budget, ML analyses session spending in similar contexts (same day/time/location). Groups transactions into sessions (1-hour gap = new session), takes the 75th percentile of session totals, and sets the ceiling at 85% — nudging savings down gradually, session by session.
+### Risk map
 
-### Adaptive timer
-The Block mode timer scales from 40s to 90s based on four weighted factors:
-- Transaction amount (40%) — bigger purchase, longer wait
-- Override history (30%) — frequent overriders get more friction
-- Time of day (15%) — late-night purchases (10pm–2am) add seconds
-- Spending velocity (15%) — 3+ blocks in one day triggers longer delays
+Merchant locations in St Andrews colour-coded by block rate. Pulsing red dots for high-risk venues, orange for medium, green for low. Tap for merchant details.
 
-### Mode suggestion engine
-Time-of-day grid analysis (7 days x 24 hours) combined with category statistics, velocity patterns, and weekly budget pacing. Returns a suggested mode with confidence score.
+### ML engine
 
-## Screens
+**Anomaly detection** — IsolationForest trained per user on an 8-feature vector: amount, hour, day of week, time since last transaction, amount-vs-average ratio, rolling 1h count, rolling 1h total, merchant frequency. Outputs a 0–100 risk score with human-readable flags.
 
-**Home** — virtual card balance, linked accounts, tonight's budget with real-world units ("~4 drinks left"), smart suggestions from ML, recent transactions
+**Adaptive timer** — scales from 40s to 90s using four weighted factors: transaction amount (40%), override history (30%), time of day (15%), spending velocity (15%).
 
-**Settings** — toggle Block/High Risk independently, set thresholds, budgets, time windows, unit labels
+**Auto-mode activation** — matches current context (day, hour, location zone) against historical spending patterns. When a risky pattern is detected, auto-activates the appropriate mode.
 
-**Block prompt** — full-screen, adaptive timer with rotating deliberation prompts showing real stats and TrueLayer context. Late-night tag when applicable.
+**Optimal spending ceiling** — analyses session spending in similar contexts. Groups transactions into sessions (1h gap = new session), takes the 75th percentile, sets ceiling at 85% — nudging savings down gradually.
 
-**Under-budget overlay** — 3-second auto-dismiss flash showing remaining budget
+**Mode suggestion engine** — 7×24 grid analysis combining category stats, velocity patterns, and weekly budget pacing. Returns a suggested mode with confidence score and recommended budget.
 
-**Over-budget prompt** — hard decline, shows spent-so-far vs budget
+### Backend
 
-**Dashboard** — risk map (merchant locations colour-coded by block rate), weekly budget tracking with nightly breakdown, risk distribution histogram, hourly/daily heatmaps, outlier transactions, spending profile
+- **13 API endpoints** covering webhooks, decisions, settings, insights, dashboard, wallet, savings, risk assessment, mode suggestions, and auto-mode
+- **Bypass system** — 5-minute time-limited whitelist scoped to user + amount + merchant for re-tap after approval
+- **Full audit trail** — every transaction logged with decision latency, risk score, mode triggered, and user outcome
+- **Spending window tracking** — running totals maintained per time window
+
+### Integrations
+
+| Service | Role |
+|---|---|
+| Marqeta | JIT Gateway — virtual card issuing, real-time webhooks, approve/decline |
+| TrueLayer | Read-only bank data powering consequence lines ("£140 left until loan payment") |
+| Firebase (FCM) | Push notifications triggering full-screen prompts when app is backgrounded |
+
+## Research backing
+
+- Dismiss/continue friction is the most effective intervention (d = 0.74, Gruning et al., PNAS 2023)
+- 10 seconds of friction reduces impulse actions by 57% (PNAS 2023)
+- Adaptive timing outperforms fixed delays by 32.8% (Time2Stop, CHI 2024)
+- Friction is 16% more effective than hard lockouts — 62% retention vs 36% (InteractOut, 2024)
+- Concrete future costs reduce impulsive choices more than abstract warnings (temporal discounting meta-analysis, PMC 2018)
 
 ## Architecture
 
@@ -67,19 +84,14 @@ Card tap → Marqeta webhook → FastAPI backend (3s SLA)
 | Bank data / context | TrueLayer (read-only) |
 | Push notifications | Firebase Cloud Messaging |
 
-## Research backing
-
-- Dismiss/continue friction is the most effective intervention (d = 0.74, Gruning et al., PNAS 2023)
-- 10 seconds of friction reduces impulse actions by 57% (PNAS 2023)
-- Adaptive timing outperforms fixed delays by 32.8% (Time2Stop, CHI 2024)
-- Friction is 16% more effective than hard lockouts — 62% retention vs 36% (InteractOut, 2024)
-- Concrete future costs reduce impulsive choices more than abstract warnings (temporal discounting meta-analysis, PMC 2018)
-
 ## Running
 
 ```bash
 # Backend
 cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+
+# Seed demo data
+cd backend && python seed.py
 
 # Frontend
 cd frontend && npm install && npx expo start

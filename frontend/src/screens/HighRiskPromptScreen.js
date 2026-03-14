@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { decideTransaction } from '../api/client';
 import { colors, font } from '../theme';
 
@@ -17,7 +18,12 @@ export default function HighRiskPromptScreen({ route, navigation }) {
 
   const overBy = runningTotal - budget;
 
-  const handleDismiss = () => {
+  useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  }, []);
+
+  const handleDecline = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const latency = Date.now() - promptShownAt.current;
     decideTransaction({
       transaction_token: transaction.id,
@@ -38,7 +44,7 @@ export default function HighRiskPromptScreen({ route, navigation }) {
 
       <View style={s.body}>
         <Text style={s.amount}>{'\u00A3'}{transaction.amount?.toFixed(2)}</Text>
-        <Text style={s.merchant}>{transaction.merchant || 'Unknown'}</Text>
+        <Text style={s.merchant} numberOfLines={1}>{transaction.merchant || 'Unknown'}</Text>
 
         <View style={s.stats}>
           <View style={s.stat}>
@@ -57,7 +63,7 @@ export default function HighRiskPromptScreen({ route, navigation }) {
         <Text style={s.hint}>This transaction was automatically blocked.</Text>
         <TouchableOpacity
           style={s.dismissBtn}
-          onPress={handleDismiss}
+          onPress={handleDecline}
           activeOpacity={0.7}
         >
           <Text style={s.dismissText}>OK</Text>
@@ -136,16 +142,33 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  dismissBtn: {
+  btnRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  declineBtn: {
+    flex: 1,
     paddingVertical: 16,
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.divider,
   },
-  dismissText: {
+  approveBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: colors.brand,
+  },
+  declineText: {
     fontFamily: font.semi,
     fontSize: 16,
     color: colors.text,
+  },
+  approveText: {
+    fontFamily: font.semi,
+    fontSize: 16,
+    color: '#050506',
   },
 });

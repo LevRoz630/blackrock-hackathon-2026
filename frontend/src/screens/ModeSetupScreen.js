@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { getSettings, updateSettings } from '../api/client';
 import { colors, font } from '../theme';
 
@@ -53,10 +54,9 @@ export default function ModeSetupScreen({ navigation }) {
 
     try {
       await updateSettings(USER_ID, payload);
-      navigation.goBack();
-    } catch {
-      navigation.goBack();
-    }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    navigation.goBack();
   };
 
   return (
@@ -73,13 +73,13 @@ export default function ModeSetupScreen({ navigation }) {
             <Text style={s.sectionName}>Block mode</Text>
             <Switch
               value={blockEnabled}
-              onValueChange={setBlockEnabled}
+              onValueChange={(v) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setBlockEnabled(v); }}
               trackColor={{ false: colors.divider, true: colors.brand }}
               thumbColor="#fff"
             />
           </View>
           <Text style={s.desc}>
-            Blocks purchases above a threshold. You get 40 seconds to reconsider before you can approve.
+            Blocks purchases above a threshold. You get a cooldown period to reconsider before you can approve.
           </Text>
           {blockEnabled && (
             <Row label="Threshold" prefix="\u00A3" value={blockThreshold} onChange={setBlockThreshold} />
@@ -91,7 +91,7 @@ export default function ModeSetupScreen({ navigation }) {
             <Text style={s.sectionName}>High risk environment</Text>
             <Switch
               value={hrEnabled}
-              onValueChange={setHrEnabled}
+              onValueChange={(v) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHrEnabled(v); }}
               trackColor={{ false: colors.divider, true: colors.brand }}
               thumbColor="#fff"
             />

@@ -148,6 +148,7 @@ export default function HomeScreen({ navigation }) {
         <Text style={s.sectionLabel}>Linked accounts</Text>
         <ScrollView
           horizontal
+          nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
           style={s.linkedRow}
           contentContainerStyle={s.linkedContent}
@@ -237,7 +238,7 @@ export default function HomeScreen({ navigation }) {
         {txns.map((tx) => (
           <View key={tx.id} style={s.tx}>
             <View style={s.txLeft}>
-              <Text style={s.txName}>{tx.merchant}</Text>
+              <Text style={s.txName} numberOfLines={1}>{tx.merchant}</Text>
               <View style={s.txMeta}>
                 <View style={[s.txDot, { backgroundColor: tx.source_color }]} />
                 <Text style={s.txSource}>{tx.source_card}</Text>
@@ -253,65 +254,18 @@ export default function HomeScreen({ navigation }) {
           </View>
         ))}
 
-        <View style={s.demoSection}>
-          <Text style={s.demoLabel}>Demo</Text>
-          <View style={s.demoRow}>
-            <TouchableOpacity
-              style={s.demoBtn}
-              onPress={() => navigation.navigate('Dashboard')}
-            >
-              <Text style={[s.demoBtnText, { color: colors.brand }]}>Insights</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={s.demoButton}
+          onPress={() => navigation.navigate('Demo')}
+          activeOpacity={0.8}
+        >
+          <Text style={s.demoPlayIcon}>{'\u25B6'}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.demoButtonTitle}>Run guided demo</Text>
+            <Text style={s.demoButtonSub}>90-second walkthrough of all features</Text>
           </View>
-          <View style={[s.demoRow, { marginTop: 10 }]}>
-            <TouchableOpacity
-              style={s.demoBtn}
-              onPress={() =>
-                navigation.navigate('BlockPrompt', {
-                  transaction: {
-                    id: 'demo-block',
-                    merchant: 'Apple Store',
-                    amount: 999.00,
-                    context_line: '\u00A3140 left until loan payment on Mar 28',
-                  },
-                  budget: budget || 60,
-                  remaining: remaining || 42,
-                  blocksToday: 3,
-                  overridesLast30d: 7,
-                })
-              }
-            >
-              <Text style={[s.demoBtnText, { color: colors.red }]}>Block</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={s.demoBtn}
-              onPress={() =>
-                navigation.navigate('HighRiskOverlay', {
-                  remaining: remaining || 42,
-                  budget: budget || 60,
-                  unitLabel: settings?.high_risk_unit_label || 'drinks',
-                  unitCost: settings?.high_risk_unit_cost || 6,
-                })
-              }
-            >
-              <Text style={[s.demoBtnText, { color: colors.brand }]}>Under</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={s.demoBtn}
-              onPress={() =>
-                navigation.navigate('HighRiskPrompt', {
-                  transaction: { id: 'demo-hr', merchant: 'Wetherspoons', amount: 24.00 },
-                  runningTotal: 78,
-                  budget: budget || 60,
-                })
-              }
-            >
-              <Text style={[s.demoBtnText, { color: colors.red }]}>Over</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          <Text style={s.arrow}>{'\u203A'}</Text>
+        </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -690,32 +644,30 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  demoSection: {
-    marginTop: 44,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.divider,
-    paddingTop: 16,
+  demoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.brandDim,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 32,
+    borderWidth: 1,
+    borderColor: colors.brand + '33',
+    gap: 12,
   },
-  demoLabel: {
+  demoPlayIcon: {
+    fontSize: 14,
+    color: colors.brand,
+  },
+  demoButtonTitle: {
+    fontFamily: font.semi,
+    fontSize: 14,
+    color: colors.brand,
+  },
+  demoButtonSub: {
     fontFamily: font.regular,
     fontSize: 12,
     color: colors.muted,
-    marginBottom: 12,
-  },
-  demoRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  demoBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.divider,
-    borderRadius: 6,
-  },
-  demoBtnText: {
-    fontFamily: font.medium,
-    fontSize: 13,
+    marginTop: 1,
   },
 });
