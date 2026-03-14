@@ -33,8 +33,8 @@ The 40-second duration is a hypothesis to be validated. Research on optimal fric
 
 ## Two modes
 
-- **Think:** User sees the prompt and can choose to proceed or pause. Soft friction.
-- **Block:** Purchase is held until the user completes the reflection. Hard friction. User opts in to this mode for higher accountability.
+- **Think:** Purchase is held until the user completes the reflection. User sees the prompt and can choose to proceed or pause. Soft friction.
+- **Block:** Hard friction. User opts in to this mode for higher accountability.
 
 ---
 
