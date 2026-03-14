@@ -8,7 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getSettings, getDemoTransactions } from '../api/client';
+import { getSettings, getDemoTransactions, getModeSuggestion } from '../api/client';
 import { colors, font } from '../theme';
 
 const USER_ID = 'demo-user';
@@ -16,12 +16,16 @@ const USER_ID = 'demo-user';
 export default function HomeScreen({ navigation }) {
   const [settings, setSettings] = useState(null);
   const [transactions] = useState(getDemoTransactions());
+  const [suggestion, setSuggestion] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
       getSettings(USER_ID)
         .then(setSettings)
         .catch(() => setSettings(null));
+      getModeSuggestion(USER_ID)
+        .then(setSuggestion)
+        .catch(() => setSuggestion(null));
     }, [])
   );
 
@@ -85,6 +89,26 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        {suggestion?.has_suggestion && (
+          <TouchableOpacity
+            style={s.suggestionCard}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('ModeSetup')}
+          >
+            <View style={s.suggestionDot} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.suggestionTitle}>
+                Smart suggestion: {suggestion.suggestion.mode === 'block' ? 'Block' : 'High Risk'} mode
+              </Text>
+              <Text style={s.suggestionReason}>{suggestion.suggestion.reason}</Text>
+              <Text style={s.suggestionBudget}>
+                Recommended: {'\u00A3'}{suggestion.suggestion.recommended_budget} · {Math.round(suggestion.suggestion.confidence * 100)}% confidence
+              </Text>
+            </View>
+            <Text style={s.arrow}>{'\u203A'}</Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={s.listLabel}>Transactions</Text>
         {transactions.map((tx) => (
           <View key={tx.id} style={s.tx}>
@@ -101,6 +125,14 @@ export default function HomeScreen({ navigation }) {
           <View style={s.demoRow}>
             <TouchableOpacity
               style={s.demoBtn}
+              onPress={() => navigation.navigate('Dashboard')}
+            >
+              <Text style={[s.demoBtnText, { color: colors.brand }]}>Insights</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[s.demoRow, { marginTop: 10 }]}>
+            <TouchableOpacity
+              style={s.demoBtn}
               onPress={() =>
                 navigation.navigate('BlockPrompt', {
                   transaction: {
@@ -109,6 +141,10 @@ export default function HomeScreen({ navigation }) {
                     amount: 999.00,
                     context_line: '\u00A3140 left until loan payment on Mar 28',
                   },
+                  budget: budget || 60,
+                  remaining: remaining || 42,
+                  blocksToday: 3,
+                  overridesLast30d: 7,
                 })
               }
             >

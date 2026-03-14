@@ -247,6 +247,213 @@ def _features_to_dict(f: TransactionFeatures) -> dict:
     }
 
 
+async def get_dashboard_data(user_id: str) -> dict:
+    db = await get_db()
+    rows = await db.execute_fetchall(
+        """SELECT amount, timestamp, merchant_name, merchant_category,
+                  was_blocked, user_decision, decision_latency_ms,
+                  risk_score, is_outlier
+           FROM transaction_events
+           WHERE user_id = ?
+           ORDER BY timestamp ASC""",
+        (user_id,),
+    )
+    rows = [tuple(r) for r in rows]
+
+    if not rows:
+        return {"status": "no_data"}
+
+    amounts = [r[0] for r in rows]
+    total = sum(amounts)
+    avg = total / len(amounts)
+    std = (sum((a - avg) ** 2 for a in amounts) / len(amounts)) ** 0.5
+
+    blocked = [r for r in rows if r[4]]
+    overrides = [r for r in rows if r[5] == "approved"]
+    latencies = [r[6] for r in rows if r[6] is not None]
+
+    risk_buckets = [0] * 10
+    for r in rows:
+        score = r[7] or 0
+        bucket = min(9, score // 10)
+        risk_buckets[bucket] += 1
+
+    merchant_totals: dict[str, float] = {}
+    for r in rows:
+        name = r[2] or "Unknown"
+        merchant_totals[name] = merchant_totals.get(name, 0) + r[0]
+    top_merchants = sorted(merchant_totals.items(), key=lambda x: x[1], reverse=True)[:6]
+
+    hourly = [{"hour": h, "count": 0, "total": 0.0} for h in range(24)]
+    daily = [{"day": d, "count": 0, "total": 0.0} for d in range(7)]
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    daily_velocity: dict[str, float] = {}
+    for r in rows:
+        ts = datetime.fromisoformat(r[1])
+        hourly[ts.hour]["count"] += 1
+        hourly[ts.hour]["total"] = round(hourly[ts.hour]["total"] + r[0], 2)
+        daily[ts.weekday()]["count"] += 1
+        daily[ts.weekday()]["total"] = round(daily[ts.weekday()]["total"] + r[0], 2)
+        day_key = ts.strftime("%Y-%m-%d")
+        daily_velocity[day_key] = daily_velocity.get(day_key, 0) + r[0]
+
+    for d in daily:
+        d["day"] = day_names[d["day"]]
+
+    velocity_series = [
+        {"date": k, "total": round(v, 2)}
+        for k, v in sorted(daily_velocity.items())
+    ]
+
+    outlier_list = [
+        {
+            "amount": r[0],
+            "timestamp": r[1],
+            "merchant": r[2],
+            "category": r[3],
+            "risk_score": r[7],
+        }
+        for r in rows if r[8]
+    ]
+
+    return {
+        "stats": {
+            "total_transactions": len(rows),
+            "total_spent": round(total, 2),
+            "avg_amount": round(avg, 2),
+            "std_amount": round(std, 2),
+            "suggested_threshold": round(avg + 2 * std, 2),
+        },
+        "overrides": {
+            "blocked_count": len(blocked),
+            "override_count": len(overrides),
+            "override_rate": round(len(overrides) / len(blocked), 2) if blocked else 0,
+            "avg_decision_latency_ms": round(sum(latencies) / len(latencies)) if latencies else 0,
+        },
+        "risk_distribution": risk_buckets,
+        "top_merchants": [{"name": m, "total": round(t, 2)} for m, t in top_merchants],
+        "hourly_heatmap": hourly,
+        "daily_heatmap": daily,
+        "daily_velocity": velocity_series,
+        "outliers": outlier_list,
+    }
+
+
+async def get_mode_suggestion(user_id: str) -> dict:
+    db = await get_db()
+    rows = await db.execute_fetchall(
+        """SELECT amount, timestamp, merchant_name, merchant_category,
+                  was_blocked, user_decision
+           FROM transaction_events
+           WHERE user_id = ?
+           ORDER BY timestamp ASC""",
+        (user_id,),
+    )
+    rows = [tuple(r) for r in rows]
+
+    if len(rows) < MIN_HISTORY:
+        return {"has_suggestion": False, "reason": "insufficient_data"}
+
+    grid: dict[tuple[int, int], dict] = {}
+    for dow in range(7):
+        for h in range(24):
+            grid[(dow, h)] = {"count": 0, "total": 0.0, "blocked": 0}
+
+    category_stats: dict[str, dict] = {}
+    for r in rows:
+        ts = datetime.fromisoformat(r[1])
+        cell = grid[(ts.weekday(), ts.hour)]
+        cell["count"] += 1
+        cell["total"] += r[0]
+        cell["blocked"] += 1 if r[4] else 0
+
+        cat = r[3] or "other"
+        if cat not in category_stats:
+            category_stats[cat] = {"count": 0, "blocked": 0}
+        category_stats[cat]["count"] += 1
+        category_stats[cat]["blocked"] += 1 if r[4] else 0
+
+    now = datetime.now()
+    dow_now = now.weekday()
+    hour_now = now.hour
+    current_cell = grid[(dow_now, hour_now)]
+
+    signals = []
+    confidence = 0.0
+
+    if current_cell["count"] >= 3:
+        block_rate = current_cell["blocked"] / current_cell["count"]
+        if block_rate > 0.3:
+            signals.append(f"Historically risky time slot ({block_rate:.0%} block rate)")
+            confidence += block_rate * 0.3
+
+    nearby_count = 0
+    nearby_total = 0.0
+    for dh in range(-1, 2):
+        h = (hour_now + dh) % 24
+        c = grid[(dow_now, h)]
+        nearby_count += c["count"]
+        nearby_total += c["total"]
+    if nearby_count >= 5:
+        signals.append(f"Active spending window ({nearby_count} historical txns nearby)")
+        confidence += 0.1
+
+    thirty_min_ago = now.timestamp() - 1800
+    recent_txns = [
+        r for r in rows
+        if datetime.fromisoformat(r[1]).timestamp() > thirty_min_ago
+    ]
+    if len(recent_txns) >= 3:
+        signals.append(f"High velocity: {len(recent_txns)} transactions in 30 min")
+        confidence += 0.2
+
+    if dow_now >= 4 and hour_now >= 18:
+        signals.append("Weekend evening — historically high-risk period")
+        confidence += 0.15
+
+    risky_cats = [
+        cat for cat, s in category_stats.items()
+        if s["count"] >= 3 and s["blocked"] / s["count"] > 0.3
+    ]
+    if risky_cats:
+        confidence += 0.05
+
+    confidence = min(1.0, confidence)
+
+    if confidence < 0.3:
+        return {"has_suggestion": False, "reason": "low_confidence", "confidence": round(confidence, 2)}
+
+    similar_amounts = []
+    for dh in range(-2, 3):
+        h = (hour_now + dh) % 24
+        for dow in range(max(0, dow_now - 1), min(7, dow_now + 2)):
+            c = grid[(dow, h)]
+            if c["count"] > 0:
+                similar_amounts.append(c["total"] / c["count"])
+
+    if similar_amounts:
+        avg_spend = sum(similar_amounts) / len(similar_amounts)
+        budget = max(20, min(200, round(avg_spend * 0.8 / 5) * 5))
+    else:
+        budget = 50
+
+    mode = "block" if confidence > 0.6 else "high_risk"
+    reason = signals[0] if signals else "Elevated risk detected"
+
+    return {
+        "has_suggestion": True,
+        "suggestion": {
+            "mode": mode,
+            "reason": reason,
+            "signals": signals,
+            "confidence": round(confidence, 2),
+            "recommended_budget": budget,
+            "recommended_window_minutes": 180,
+        },
+    }
+
+
 async def get_user_spending_profile(user_id: str) -> dict:
     rows, merchant_counts = await _load_user_history(user_id)
 

@@ -69,3 +69,11 @@ export function registerFcmToken(userId, token) {
 export function getInsights(userId) {
   return request('GET', `/users/${userId}/insights`);
 }
+
+export function getDashboard(userId) {
+  return request('GET', `/users/${userId}/dashboard`);
+}
+
+export function getModeSuggestion(userId) {
+  return request('GET', `/users/${userId}/mode-suggestion`);
+}

@@ -1,7 +1,12 @@
 from fastapi import APIRouter
 
 from app.services.events import get_user_insights
-from app.services.ml import assess_transaction, get_user_spending_profile
+from app.services.ml import (
+    assess_transaction,
+    get_dashboard_data,
+    get_mode_suggestion,
+    get_user_spending_profile,
+)
 
 router = APIRouter(prefix="/users", tags=["insights"])
 
@@ -14,6 +19,16 @@ async def user_insights(user_id: str) -> dict:
 @router.get("/{user_id}/spending-profile")
 async def spending_profile(user_id: str) -> dict:
     return await get_user_spending_profile(user_id)
+
+
+@router.get("/{user_id}/dashboard")
+async def dashboard(user_id: str) -> dict:
+    return await get_dashboard_data(user_id)
+
+
+@router.get("/{user_id}/mode-suggestion")
+async def mode_suggestion(user_id: str) -> dict:
+    return await get_mode_suggestion(user_id)
 
 
 @router.post("/{user_id}/assess")
