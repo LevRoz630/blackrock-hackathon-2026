@@ -18,9 +18,10 @@ A friction layer that activates when a user is about to make a significant purch
 ## How it works
 
 - **Spending limit:** User sets a card-level limit for a specific context (e.g. nights out) or a time window (e.g. this weekend). Can also be permanent. Default limits suggested by ML based on past behaviour.
-- **Trigger:** When a purchase approaches or exceeds the limit, the app intercepts with a 40-second reflection prompt before the transaction is approved.
-- **The prompt:** "It is 6 months from now. You are stressed about money. This was one of the purchases you regret. Why?" User must engage before proceeding.
-- **Contextualisation:** The app shows the real cost in future terms — what this purchase means for your end-of-month balance, your savings goal, or your hourly wage. Visual and specific, not abstract.
+- **Trigger:** When a purchase approaches or exceeds the limit, the app intercepts with a 40-second reflection prompt before the transaction is approved. 
+- **The prompt:** "You have exceeded the allowed limit.
+Are you sure you want to make this purchase?"
+- **Contextualisation:** The app shows the real cost in future terms — what this purchase means for your end-of-month balance, your savings goal, or your hourly wage. Visual and specific, not abstract. (Minimal or no info, privacy concerns)
 
 ---
 
@@ -71,9 +72,18 @@ Real-time interception is possible using Marqeta's virtual card platform. Marqet
 
 It is Friday night. A student has set a £40 night-out limit for the weekend. They are at a bar and tap their virtual card for a £45 round of drinks.
 
-Marqeta intercepts the transaction and fires a webhook. The app sends a push notification: "You are £5 over your night-out limit. It is 6 months from now — you are stressed about money. Was this worth it?" Two buttons: Approve anyway / Cancel.
+Marqeta intercepts the transaction and fires a webhook.
+The app sends a push notification: "You are £5 over your night-out limit. 
 
-Below the prompt the app shows: "This takes your total spend tonight to £45. At this rate you will be £120 short before next student loan payment." The student sees the number, pauses, and either makes a conscious decision to proceed or puts the round on someone else.
+- Think mode: 
+Are you sure?" Upon the completion of waiting period, two buttons are activated: Approve anyway / Cancel.
+
+- Block mode: 
+Nothing happens, transaction blocjks 
+
+
+
+Below the prompt the app shows: "This takes your total spend tonight to £45.".
 
 **Sandbox:** Marqeta's sandbox is free, available immediately on sign-up, and supports full transaction simulation including webhooks. The entire demo flow above can be built and shown without any live bank connection or regulatory approval.
 
